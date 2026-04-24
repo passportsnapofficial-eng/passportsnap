@@ -16,7 +16,7 @@ async function compositePngOnWhite(pngBlob) {
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(img, 0, 0);
-  return canvasToBlob(canvas, 'image/jpeg', 0.96);
+  return canvasToBlob(canvas, 'image/png');
 }
 
 function parseNumericHeader(headers, key) {

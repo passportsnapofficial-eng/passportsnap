@@ -1539,8 +1539,7 @@ export async function validatePassportPhotoPayload(payload, options = {}) {
 
   postStage('check-output', { requestId, onStageChange });
   const exportBlob = await exportCanvas.convertToBlob({
-    type: 'image/jpeg',
-    quality: 0.96,
+    type: 'image/png',
   });
   const exportDataUrl = await blobToDataUrl(exportBlob);
 
