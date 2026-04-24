@@ -194,8 +194,8 @@ function enrichFace(faceInput, frameWidth, frameHeight) {
   const yawAbs = Math.abs(yawOffsetRatio);
   const eyesLevel = rollAbs <= 10;
   const eyesLevelBorderline = rollAbs <= 14;
-  const yawOkay = yawAbs <= 0.15;
-  const yawBorderline = yawAbs <= 0.2;
+  const yawOkay = yawAbs <= 0.18;
+  const yawBorderline = yawAbs <= 0.23;
   const pitchOkay = noseVerticalRatio >= 0.23 && noseVerticalRatio <= 0.5;
   const pitchBorderline = noseVerticalRatio >= 0.2 && noseVerticalRatio <= 0.54;
   const headStraight = eyesLevel && yawOkay && pitchOkay;
@@ -213,8 +213,8 @@ function enrichFace(faceInput, frameWidth, frameHeight) {
     rightEarScorePoint.x < frameWidth * 0.985 &&
     sideMarginsOkay;
   const eyesOpen =
-    leftEyeEAR >= 0.155 &&
-    rightEyeEAR >= 0.155 &&
+    leftEyeEAR >= 0.13 &&
+    rightEyeEAR >= 0.13 &&
     blinkScore <= 0.58;
   const mouthClosed = jawOpenScore <= 0.18 && lipGapRatio <= 0.085;
   const mouthClosedBorderline = jawOpenScore <= 0.28 && lipGapRatio <= 0.11;

@@ -3,6 +3,22 @@ import { canvasToBlob, loadImageElement } from './cropUtils';
 const DEFAULT_MODEL = 'remove_bg_api';
 const DEFAULT_ENDPOINT = '/api/remove-bg';
 
+async function compositePngOnWhite(pngBlob) {
+  const dataUrl = await readBlobAsDataUrl(pngBlob);
+  const img = await loadImageElement(dataUrl);
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth || img.width;
+  canvas.height = img.naturalHeight || img.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Could not composite background removal result.');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, 0, 0);
+  return canvasToBlob(canvas, 'image/jpeg', 0.96);
+}
+
 function parseNumericHeader(headers, key) {
   const value = Number(headers.get(key) || '');
   return Number.isFinite(value) ? value : 0;
@@ -34,7 +50,7 @@ async function createBackgroundRemovalUpload(source) {
   context.imageSmoothingQuality = 'high';
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
 
-  const blob = await canvasToBlob(canvas, 'image/jpeg', 0.96);
+  const blob = await canvasToBlob(canvas, 'image/png');
   if (!blob) {
     throw new Error('Could not prepare the image for background removal.');
   }
@@ -71,7 +87,7 @@ export async function removeBackgroundForPassportExport(source, options = {}) {
   const formData = new FormData();
 
   formData.append('model', model);
-  formData.append('file', uploadBlob, 'reviewed-source.jpg');
+  formData.append('file', uploadBlob, 'reviewed-source.png');
 
   const response = await fetch(endpoint, {
     method: 'POST',
@@ -82,7 +98,12 @@ export async function removeBackgroundForPassportExport(source, options = {}) {
     throw new Error(await parseErrorResponse(response));
   }
 
-  const processedBlob = await response.blob();
+  const rawBlob = await response.blob();
+  if (!rawBlob || rawBlob.size === 0) {
+    throw new Error('Background cleanup did not return a usable photo.');
+  }
+
+  const processedBlob = await compositePngOnWhite(rawBlob);
   if (!processedBlob || processedBlob.size === 0) {
     throw new Error('Background cleanup did not return a usable photo.');
   }

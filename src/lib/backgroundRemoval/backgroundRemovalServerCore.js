@@ -109,9 +109,9 @@ async function buildRemoveBgRequestBody(bodyBuffer, contentType) {
   }
 
   const removeBgFormData = new FormData();
-  removeBgFormData.append('size', 'auto');
-  removeBgFormData.append('format', 'jpg');
-  removeBgFormData.append('bg_color', 'FFFFFF');
+  removeBgFormData.append('size', 'regular');
+  removeBgFormData.append('type', 'person');
+  removeBgFormData.append('format', 'png');
 
   if (uploadedFile instanceof Blob) {
     removeBgFormData.append('image_file', uploadedFile, readFileName(uploadedFile));

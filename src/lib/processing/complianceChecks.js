@@ -311,9 +311,9 @@ export function buildComplianceChecks(processed, preset, documentType = null) {
   const faceSharpnessVariance = Number(sharpness?.faceLaplacianVariance || sharpness?.laplacianVariance || 0);
   const faceSharpnessEdgeDensity = Number(sharpness?.faceEdgeDensity || 0);
   const analysisQualityStrongEnough =
-    Number(sharpness?.qualityScore || 0) >= 0.52 &&
-    (faceSharpnessVariance >= 55 || portraitSharpnessVariance >= 80) &&
-    (faceSharpnessEdgeDensity >= 0.024 || portraitSharpnessEdgeDensity >= 0.032);
+    Number(sharpness?.qualityScore || 0) >= 0.35 &&
+    (faceSharpnessVariance >= 30 || portraitSharpnessVariance >= 42) &&
+    (faceSharpnessEdgeDensity >= 0.018 || portraitSharpnessEdgeDensity >= 0.024);
   const acceptedBackgroundLabel = formatToneList(allowedBackgroundTones);
   const checks = [];
 
