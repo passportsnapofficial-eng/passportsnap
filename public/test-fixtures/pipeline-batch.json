@@ -1,0 +1,212 @@
+{
+  "generatedAt": "2026-04-24T08:06:08.219Z",
+  "localCount": 13,
+  "externalCount": 20,
+  "cases": [
+    {
+      "sourcePath": "/test-fixtures/local-batch/360_F_373522464_UzkM3IvqgqpS0qIy2kpkB5QiV7Bw7NyS.jpg",
+      "description": "Local test image: 360_F_373522464_UzkM3IvqgqpS0qIy2kpkB5QiV7Bw7NyS.jpg",
+      "sourceType": "local"
+    },
+    {
+      "sourcePath": "/test-fixtures/local-batch/4a9c9654-aa65-45e8-b34a-3ce3f730583d-background-removed.jpg",
+      "description": "Local test image: 4a9c9654-aa65-45e8-b34a-3ce3f730583d-background-removed.jpg",
+      "sourceType": "local"
+    },
+    {
+      "sourcePath": "/test-fixtures/local-batch/4a9c9654-aa65-45e8-b34a-3ce3f730583d.webp",
+      "description": "Local test image: 4a9c9654-aa65-45e8-b34a-3ce3f730583d.webp",
+      "sourceType": "local"
+    },
+    {
+      "sourcePath": "/test-fixtures/local-batch/glasses_close_up.webp",
+      "description": "Local test image: glasses_close_up.webp",
+      "sourceType": "local"
+    },
+    {
+      "sourcePath": "/test-fixtures/local-batch/official-portrait-woman-passport-photo-600nw-2370794875.webp",
+      "description": "Local test image: official-portrait-woman-passport-photo-600nw-2370794875.webp",
+      "sourceType": "local"
+    },
+    {
+      "sourcePath": "/test-fixtures/local-batch/passport-photo-serious-young-adult-600nw-2317626543.webp",
+      "description": "Local test image: passport-photo-serious-young-adult-600nw-2317626543.webp",
+      "sourceType": "local"
+    },
+    {
+      "sourcePath": "/test-fixtures/local-batch/WhatsApp Image 2026-04-07 at 11.06.38 PM.jpeg",
+      "description": "Local test image: WhatsApp Image 2026-04-07 at 11.06.38 PM.jpeg",
+      "sourceType": "local"
+    },
+    {
+      "sourcePath": "/test-fixtures/local-batch/WhatsApp Image 2026-04-07 at 11.23.51 PM.jpeg",
+      "description": "Local test image: WhatsApp Image 2026-04-07 at 11.23.51 PM.jpeg",
+      "sourceType": "local"
+    },
+    {
+      "sourcePath": "/test-fixtures/local-batch/WhatsApp Image 2026-04-07 at 11.23.52 PM (1).jpeg",
+      "description": "Local test image: WhatsApp Image 2026-04-07 at 11.23.52 PM (1).jpeg",
+      "sourceType": "local"
+    },
+    {
+      "sourcePath": "/test-fixtures/local-batch/WhatsApp Image 2026-04-07 at 11.23.52 PM (2).jpeg",
+      "description": "Local test image: WhatsApp Image 2026-04-07 at 11.23.52 PM (2).jpeg",
+      "sourceType": "local"
+    },
+    {
+      "sourcePath": "/test-fixtures/local-batch/WhatsApp Image 2026-04-07 at 11.23.52 PM (3).jpeg",
+      "description": "Local test image: WhatsApp Image 2026-04-07 at 11.23.52 PM (3).jpeg",
+      "sourceType": "local"
+    },
+    {
+      "sourcePath": "/test-fixtures/local-batch/WhatsApp Image 2026-04-07 at 11.23.52 PM.jpeg",
+      "description": "Local test image: WhatsApp Image 2026-04-07 at 11.23.52 PM.jpeg",
+      "sourceType": "local"
+    },
+    {
+      "sourcePath": "/test-fixtures/local-batch/WhatsApp Image 2026-04-08 at 12.14.41 PM (1).jpeg",
+      "description": "Local test image: WhatsApp Image 2026-04-08 at 12.14.41 PM (1).jpeg",
+      "sourceType": "local"
+    },
+    {
+      "sourcePath": "/test-fixtures/external/unsplash-woman-1.jpg",
+      "description": "Unsplash portrait: unsplash-woman-1",
+      "sourceType": "external",
+      "provider": "Unsplash",
+      "remoteUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?fm=jpg&q=80&w=1200&fit=crop"
+    },
+    {
+      "sourcePath": "/test-fixtures/external/unsplash-man-1.jpg",
+      "description": "Unsplash portrait: unsplash-man-1",
+      "sourceType": "external",
+      "provider": "Unsplash",
+      "remoteUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?fm=jpg&q=80&w=1200&fit=crop"
+    },
+    {
+      "sourcePath": "/test-fixtures/external/unsplash-man-2.jpg",
+      "description": "Unsplash portrait: unsplash-man-2",
+      "sourceType": "external",
+      "provider": "Unsplash",
+      "remoteUrl": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?fm=jpg&q=80&w=1200&fit=crop"
+    },
+    {
+      "sourcePath": "/test-fixtures/external/unsplash-woman-2.jpg",
+      "description": "Unsplash portrait: unsplash-woman-2",
+      "sourceType": "external",
+      "provider": "Unsplash",
+      "remoteUrl": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?fm=jpg&q=80&w=1200&fit=crop"
+    },
+    {
+      "sourcePath": "/test-fixtures/external/unsplash-woman-3.jpg",
+      "description": "Unsplash portrait: unsplash-woman-3",
+      "sourceType": "external",
+      "provider": "Unsplash",
+      "remoteUrl": "https://images.unsplash.com/photo-1517841905240-472988babdf9?fm=jpg&q=80&w=1200&fit=crop"
+    },
+    {
+      "sourcePath": "/test-fixtures/external/pexels-man-1.jpeg",
+      "description": "Pexels portrait: pexels-man-1",
+      "sourceType": "external",
+      "provider": "Pexels",
+      "remoteUrl": "https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=1200&h=1600&fit=crop"
+    },
+    {
+      "sourcePath": "/test-fixtures/external/pexels-woman-1.jpeg",
+      "description": "Pexels portrait: pexels-woman-1",
+      "sourceType": "external",
+      "provider": "Pexels",
+      "remoteUrl": "https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=1200&h=1600&fit=crop"
+    },
+    {
+      "sourcePath": "/test-fixtures/external/pexels-woman-2.jpeg",
+      "description": "Pexels portrait: pexels-woman-2",
+      "sourceType": "external",
+      "provider": "Pexels",
+      "remoteUrl": "https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=1200&h=1600&fit=crop"
+    },
+    {
+      "sourcePath": "/test-fixtures/external/pexels-man-2.jpeg",
+      "description": "Pexels portrait: pexels-man-2",
+      "sourceType": "external",
+      "provider": "Pexels",
+      "remoteUrl": "https://images.pexels.com/photos/614810/pexels-photo-614810.jpeg?auto=compress&cs=tinysrgb&w=1200&h=1600&fit=crop"
+    },
+    {
+      "sourcePath": "/test-fixtures/external/pexels-woman-3.jpeg",
+      "description": "Pexels portrait: pexels-woman-3",
+      "sourceType": "external",
+      "provider": "Pexels",
+      "remoteUrl": "https://images.pexels.com/photos/697509/pexels-photo-697509.jpeg?auto=compress&cs=tinysrgb&w=1200&h=1600&fit=crop"
+    },
+    {
+      "sourcePath": "/test-fixtures/external/pexels-headshot-man-1.jpeg",
+      "description": "Pexels portrait: pexels-headshot-man-1",
+      "sourceType": "external",
+      "provider": "Pexels",
+      "remoteUrl": "https://images.pexels.com/photos/32721690/pexels-photo-32721690.jpeg?cs=srgb&dl=pexels-shootsaga-32721690.jpg&fm=jpg"
+    },
+    {
+      "sourcePath": "/test-fixtures/external/pexels-headshot-man-2.jpeg",
+      "description": "Pexels portrait: pexels-headshot-man-2",
+      "sourceType": "external",
+      "provider": "Pexels",
+      "remoteUrl": "https://images.pexels.com/photos/32721688/pexels-photo-32721688.jpeg?cs=srgb&dl=pexels-shootsaga-32721688.jpg&fm=jpg"
+    },
+    {
+      "sourcePath": "/test-fixtures/external/pexels-headshot-man-3.jpeg",
+      "description": "Pexels portrait: pexels-headshot-man-3",
+      "sourceType": "external",
+      "provider": "Pexels",
+      "remoteUrl": "https://images.pexels.com/photos/30124371/pexels-photo-30124371.jpeg?cs=srgb&dl=pexels-ipaye-gbolahan-2147547099-30124371.jpg&fm=jpg"
+    },
+    {
+      "sourcePath": "/test-fixtures/external/pexels-headshot-woman-1.jpeg",
+      "description": "Pexels portrait: pexels-headshot-woman-1",
+      "sourceType": "external",
+      "provider": "Pexels",
+      "remoteUrl": "https://images.pexels.com/photos/35721589/pexels-photo-35721589.jpeg?cs=srgb&dl=pexels-eric-quinones-2149843819-35721589.jpg&fm=jpg"
+    },
+    {
+      "sourcePath": "/test-fixtures/external/pexels-headshot-man-4.jpeg",
+      "description": "Pexels portrait: pexels-headshot-man-4",
+      "sourceType": "external",
+      "provider": "Pexels",
+      "remoteUrl": "https://images.pexels.com/photos/37148339/pexels-photo-37148339.jpeg?cs=srgb&dl=pexels-vincent-santamaria-194760512-37148339.jpg&fm=jpg"
+    },
+    {
+      "sourcePath": "/test-fixtures/external/pexels-headshot-man-5.jpeg",
+      "description": "Pexels portrait: pexels-headshot-man-5",
+      "sourceType": "external",
+      "provider": "Pexels",
+      "remoteUrl": "https://images.pexels.com/photos/36687798/pexels-photo-36687798.jpeg?cs=srgb&dl=pexels-travel-with-lenses-734723610-36687798.jpg&fm=jpg"
+    },
+    {
+      "sourcePath": "/test-fixtures/external/pexels-headshot-man-6.jpeg",
+      "description": "Pexels portrait: pexels-headshot-man-6",
+      "sourceType": "external",
+      "provider": "Pexels",
+      "remoteUrl": "https://images.pexels.com/photos/37148308/pexels-photo-37148308.jpeg?cs=srgb&dl=pexels-vincent-santamaria-194760512-37148308.jpg&fm=jpg"
+    },
+    {
+      "sourcePath": "/test-fixtures/external/pexels-headshot-woman-2.jpeg",
+      "description": "Pexels portrait: pexels-headshot-woman-2",
+      "sourceType": "external",
+      "provider": "Pexels",
+      "remoteUrl": "https://images.pexels.com/photos/31530222/pexels-photo-31530222.jpeg?cs=srgb&dl=pexels-oliver-dohrn-706160180-31530222.jpg&fm=jpg"
+    },
+    {
+      "sourcePath": "/test-fixtures/external/pexels-headshot-woman-3.jpeg",
+      "description": "Pexels portrait: pexels-headshot-woman-3",
+      "sourceType": "external",
+      "provider": "Pexels",
+      "remoteUrl": "https://images.pexels.com/photos/30468636/pexels-photo-30468636.jpeg?cs=srgb&dl=pexels-augustocarneirojr-30468636.jpg&fm=jpg"
+    },
+    {
+      "sourcePath": "/test-fixtures/external/pexels-headshot-woman-4.jpeg",
+      "description": "Pexels portrait: pexels-headshot-woman-4",
+      "sourceType": "external",
+      "provider": "Pexels",
+      "remoteUrl": "https://images.pexels.com/photos/3786525/pexels-photo-3786525.jpeg?cs=srgb&dl=pexels-olly-3786525.jpg&fm=jpg"
+    }
+  ]
+}

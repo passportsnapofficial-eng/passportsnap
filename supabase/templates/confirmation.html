@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Confirm your Passportsnap account</title>
+  </head>
+  <body style="margin:0;padding:0;background:#eff6ff;font-family:Aptos,'Segoe UI','Helvetica Neue',Arial,sans-serif;color:#0f172a;">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#eff6ff;padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table
+            role="presentation"
+            cellpadding="0"
+            cellspacing="0"
+            width="100%"
+            style="max-width:640px;background:#ffffff;border:1px solid #dbeafe;border-radius:28px;overflow:hidden;box-shadow:0 28px 80px -40px rgba(15,23,42,0.28);"
+          >
+            <tr>
+              <td style="padding:40px 32px;background:linear-gradient(135deg,#0f172a 0%,#1d4ed8 100%);color:#ffffff;">
+                <div style="font-size:13px;font-weight:700;letter-spacing:0.24em;text-transform:uppercase;color:#bfdbfe;">
+                  Passportsnap
+                </div>
+                <h1 style="margin:16px 0 0;font-size:34px;line-height:1.1;font-weight:700;color:#ffffff;">
+                  Confirm your email
+                </h1>
+                <p style="margin:16px 0 0;font-size:16px;line-height:1.7;color:#dbeafe;">
+                  {{ if .Data.full_name }}Hi {{ .Data.full_name }},{{ else }}Hi,{{ end }} confirm your account to start using Passportsnap and access your saved photo orders.
+                </p>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:32px;">
+                <p style="margin:0;font-size:16px;line-height:1.8;color:#334155;">
+                  Click the button below to verify your email address and finish setting up your Passportsnap account.
+                </p>
+
+                <table role="presentation" cellpadding="0" cellspacing="0" style="margin:28px 0 24px;">
+                  <tr>
+                    <td align="center" bgcolor="#2563eb" style="border-radius:999px;">
+                      <a
+                        href="{{ .ConfirmationURL }}"
+                        style="display:inline-block;padding:16px 28px;font-size:15px;font-weight:700;line-height:1;text-decoration:none;color:#ffffff;"
+                      >
+                        Confirm email
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+
+                <div style="padding:18px 20px;border:1px solid #dbeafe;border-radius:22px;background:#f8fbff;">
+                  <div style="font-size:12px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#64748b;">
+                    What happens next
+                  </div>
+                  <p style="margin:10px 0 0;font-size:14px;line-height:1.8;color:#475569;">
+                    After confirmation, you can sign in, save your profile, and keep your passport-photo orders synced in your dashboard.
+                  </p>
+                </div>
+
+                <p style="margin:24px 0 0;font-size:13px;line-height:1.8;color:#64748b;">
+                  If the button does not work, copy and paste this link into your browser:
+                </p>
+                <p style="margin:8px 0 0;font-size:13px;line-height:1.8;word-break:break-word;color:#2563eb;">
+                  {{ .ConfirmationURL }}
+                </p>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:24px 32px;border-top:1px solid #e2e8f0;background:#f8fafc;">
+                <p style="margin:0;font-size:12px;line-height:1.8;color:#64748b;">
+                  You are receiving this email because an account was created for {{ .Email }} on Passportsnap.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

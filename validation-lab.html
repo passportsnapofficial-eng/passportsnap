@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PassportSnap Validation Lab</title>
+    <style>
+      body {
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f8fafc;
+        color: #0f172a;
+        margin: 0;
+        padding: 24px;
+      }
+
+      main {
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 32px;
+      }
+
+      p {
+        margin: 0 0 20px;
+        line-height: 1.6;
+        color: #475569;
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 20px;
+        padding: 18px;
+        box-shadow: 0 20px 45px -35px rgba(15, 23, 42, 0.35);
+      }
+
+      .card h2 {
+        margin: 0 0 10px;
+        font-size: 20px;
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .pass {
+        background: #dcfce7;
+        color: #166534;
+      }
+
+      .warn {
+        background: #fef3c7;
+        color: #92400e;
+      }
+
+      .fail {
+        background: #fee2e2;
+        color: #991b1b;
+      }
+
+      .metric {
+        border-radius: 16px;
+        background: #f8fafc;
+        padding: 12px;
+      }
+
+      .metric strong {
+        display: block;
+        font-size: 12px;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .metric span {
+        display: block;
+        margin-top: 6px;
+        font-size: 15px;
+        font-weight: 600;
+      }
+
+      .failed-list {
+        margin: 12px 0 0;
+        padding-left: 18px;
+        color: #475569;
+      }
+
+      img.preview {
+        display: block;
+        margin-top: 14px;
+        max-width: 220px;
+        border-radius: 18px;
+        border: 1px solid #e2e8f0;
+        background: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Validation Lab</h1>
+      <p>
+        This page runs the same reviewed-photo processing pipeline as the app and checks the expected
+        behavior for the local fixture images.
+      </p>
+      <div id="results" class="grid">
+        <div class="card">Running validation...</div>
+      </div>
+      <p id="progress">Preparing validation cases...</p>
+    </main>
+
+    <script type="module">
+      import { getDocumentById } from '/src/data/documentTypes.js';
+      import { getSizePresetById } from '/src/data/sizePresets.js';
+      import { buildReviewedSourcePhoto } from '/src/lib/processing/reviewTransform.js';
+      import { processPassportPhoto } from '/src/lib/processing/mockPassportProcessor.js';
+
+      const defaultCases = [
+        {
+          sourcePath: '/test-fixtures/glasses_close_up.webp',
+          expectedStatus: 'needs_retake',
+          requiredFailedCheck: 'eyewearFree',
+          description: 'Glasses should be rejected.',
+        },
+        {
+          sourcePath: '/test-fixtures/official-portrait-woman-passport-photo-600nw-2370794875.webp',
+          expectedStatus: 'passed',
+          description: 'White background and no glasses should pass.',
+        },
+        {
+          sourcePath: '/test-fixtures/WhatsApp Image 2026-04-07 at 11.23.52 PM (1).jpeg',
+          expectedStatus: 'passed',
+          expectedBackgroundTone: 'cream',
+          shouldOfferOptionalRetouch: true,
+          description: 'Light cream background should pass, warn that white is safer, and keep optional retouch available.',
+        },
+        {
+          sourcePath: '/test-fixtures/screenshot-223806-crop.png',
+          expectedStatus: 'needs_retake',
+          requiredFailedCheck: 'eyewearFree',
+          description: 'Screenshot crop of the live false negative should not pass when glasses are visible.',
+        },
+        {
+          sourcePath: '/test-fixtures/WhatsApp Image 2026-04-08 at 12.14.41 PM (1).jpeg',
+          expectedStatus: 'needs_retake',
+          requiredFailedCheck: 'eyewearFree',
+          description: 'Dark-framed glasses on a dark background should still be rejected.',
+        },
+      ];
+
+      const documentId = 'us-passport';
+      const progress = document.getElementById('progress');
+
+      async function loadCases() {
+        const url = new URL(window.location.href);
+        const manifestPath = url.searchParams.get('manifest');
+
+        if (!manifestPath) {
+          return defaultCases;
+        }
+
+        const response = await fetch(manifestPath, { cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error(`Could not load manifest: ${manifestPath}`);
+        }
+
+        const payload = await response.json();
+        if (Array.isArray(payload)) {
+          return payload;
+        }
+
+        if (Array.isArray(payload?.cases)) {
+          return payload.cases;
+        }
+
+        throw new Error('Manifest did not include a cases array.');
+      }
+
+      function setProgress(message) {
+        progress.textContent = message;
+        window.__validationLabStage = message;
+      }
+
+      function buildStatusClass(result, entry) {
+        const failedLabels = result.failedChecks.map((check) => check.key);
+
+        if (entry.expectedStatus && result.status !== entry.expectedStatus) {
+          return 'fail';
+        }
+
+        if (entry.requiredFailedCheck && !failedLabels.includes(entry.requiredFailedCheck)) {
+          return 'fail';
+        }
+
+        if (entry.expectedBackgroundTone && result.metadata.analysis.background.backgroundTone !== entry.expectedBackgroundTone) {
+          return 'fail';
+        }
+
+        return result.status === 'passed' ? 'pass' : result.status === 'needs_retouch' ? 'warn' : 'fail';
+      }
+
+      function renderEntry(entry, result, reviewedPhoto) {
+        const failedChecks = result.failedChecks || [];
+        const rejectionReasons = result.rejectionReasons || [];
+        const background = result.metadata.analysis.background || {};
+        const eyewear = result.metadata.analysis.eyewear || {};
+        const statusClass = buildStatusClass(result, entry);
+        const container = document.createElement('section');
+
+        container.className = 'card';
+        container.innerHTML = `
+          <div class="pill ${statusClass}">
+            ${statusClass === 'fail' ? 'Mismatch' : result.status}
+          </div>
+          <h2>${entry.sourcePath.split('/').pop()}</h2>
+          <p>${entry.description}</p>
+          <div class="row">
+            <div class="metric">
+              <strong>Status</strong>
+              <span>${result.status}</span>
+            </div>
+            <div class="metric">
+              <strong>Background Tone</strong>
+              <span>${background.backgroundToneLabel || background.backgroundTone || 'Unknown'}</span>
+            </div>
+            <div class="metric">
+              <strong>Background Sample</strong>
+              <span>${background.backgroundSampleSource || 'unknown'}</span>
+            </div>
+            <div class="metric">
+              <strong>Eyewear Detected</strong>
+              <span>${eyewear.wearingGlasses ? 'Yes' : 'No'}</span>
+            </div>
+            <div class="metric">
+              <strong>Eyewear Score</strong>
+              <span>${Number(eyewear.eyewearScore || 0).toFixed(3)}</span>
+            </div>
+            <div class="metric">
+              <strong>Can Checkout</strong>
+              <span>${result.canProceedToCheckout ? 'Yes' : 'No'}</span>
+            </div>
+            <div class="metric">
+              <strong>Optional Retouch</strong>
+              <span>${entry.shouldOfferOptionalRetouch && result.status === 'passed' && background.backgroundTone !== 'white' ? 'Yes' : 'No'}</span>
+            </div>
+            <div class="metric">
+              <strong>Failed Checks</strong>
+              <span>${failedChecks.length}</span>
+            </div>
+          </div>
+          <ul class="failed-list">
+            ${
+              rejectionReasons.length
+                ? rejectionReasons.map((reason) => `<li>${reason}</li>`).join('')
+                : '<li>No rejection reasons returned.</li>'
+            }
+          </ul>
+          <ul class="failed-list">
+            ${
+              failedChecks.length
+                ? failedChecks.map((check) => `<li>${check.key}: ${check.label}</li>`).join('')
+                : '<li>No blocking checks failed.</li>'
+            }
+          </ul>
+        `;
+
+        const image = document.createElement('img');
+        image.src = reviewedPhoto;
+        image.alt = entry.sourcePath.split('/').pop();
+        image.className = 'preview';
+        container.appendChild(image);
+
+        return container;
+      }
+
+      function getErrorMessage(error) {
+        if (error instanceof Error) {
+          return error.message;
+        }
+
+        if (typeof error === 'string') {
+          return error;
+        }
+
+        return JSON.stringify(error) || 'Unknown validation error.';
+      }
+
+      function renderErrorEntry(entry, errorMessage) {
+        const container = document.createElement('section');
+        container.className = 'card';
+        container.innerHTML = `
+          <div class="pill fail">Error</div>
+          <h2>${entry.sourcePath.split('/').pop()}</h2>
+          <p>${entry.description}</p>
+          <ul class="failed-list">
+            <li>${errorMessage}</li>
+          </ul>
+        `;
+        return container;
+      }
+
+      async function run() {
+        const container = document.getElementById('results');
+        container.innerHTML = '';
+        setProgress('Loading document settings...');
+
+        try {
+          const documentType = getDocumentById(documentId);
+          const preset = getSizePresetById(documentType.presetId);
+          const cases = await loadCases();
+          const results = [];
+          const failures = [];
+
+          for (const entry of cases) {
+            try {
+              setProgress(`Building reviewed photo for ${entry.sourcePath.split('/').pop()}...`);
+              const reviewedPhoto = await buildReviewedSourcePhoto(entry.sourcePath, preset, {});
+              setProgress(`Processing ${entry.sourcePath.split('/').pop()}...`);
+              const result = await processPassportPhoto(reviewedPhoto, {
+                documentType,
+                preset,
+                countryLabel: documentType.countryLabel,
+                respectSourceFraming: true,
+                onStageChange: (stageKey) => {
+                  setProgress(`${entry.sourcePath.split('/').pop()}: ${stageKey}`);
+                },
+              });
+
+              results.push({
+                sourcePath: entry.sourcePath,
+                status: result.status,
+                canProceedToCheckout: result.canProceedToCheckout,
+                requiresPremiumRetouch: result.requiresPremiumRetouch,
+                rejectionReasons: result.rejectionReasons || [],
+                failedChecks: result.failedChecks.map((check) => check.key),
+                backgroundTone: result.metadata.analysis.background.backgroundTone,
+                backgroundToneLabel: result.metadata.analysis.background.backgroundToneLabel,
+                backgroundSampleSource: result.metadata.analysis.background.backgroundSampleSource,
+                shadowDarkRatio: result.metadata.analysis.background.shadowDarkRatio,
+                meanLuminance: result.metadata.analysis.background.meanLuminance,
+                edgeDensity: result.metadata.analysis.background.edgeDensity,
+                eyewearDetected: result.metadata.analysis.eyewear.wearingGlasses,
+                eyewearScore: result.metadata.analysis.eyewear.eyewearScore,
+                glareRatio: result.metadata.analysis.eyewear.glareRatio,
+                bridgeDarkRatio: result.metadata.analysis.eyewear.bridgeDarkRatio,
+                bridgeEdgeDensity: result.metadata.analysis.eyewear.bridgeEdgeDensity,
+                templeDarkRatio: result.metadata.analysis.eyewear.templeDarkRatio,
+                templeEdgeDensity: result.metadata.analysis.eyewear.templeEdgeDensity,
+                eyeBandDarkRatio: result.metadata.analysis.eyewear.eyeBandDarkRatio,
+                eyeBandEdgeDensity: result.metadata.analysis.eyewear.eyeBandEdgeDensity,
+                averageEyeDarkRatio: result.metadata.analysis.eyewear.averageEyeDarkRatio,
+                averageEyeEdgeDensity: result.metadata.analysis.eyewear.averageEyeEdgeDensity,
+                averageEyeLuminance: result.metadata.analysis.eyewear.averageEyeLuminance,
+                eyeToFaceLuminanceRatio: result.metadata.analysis.eyewear.eyeToFaceLuminanceRatio,
+                sharpEnough: result.metadata.analysis.sharpness.sharpEnough,
+                qualityScore: result.metadata.analysis.sharpness.qualityScore,
+                faceLaplacianVariance: result.metadata.analysis.sharpness.faceLaplacianVariance,
+                portraitLaplacianVariance: result.metadata.analysis.sharpness.portraitLaplacianVariance,
+                faceEdgeDensity: result.metadata.analysis.sharpness.faceEdgeDensity,
+                portraitEdgeDensity: result.metadata.analysis.sharpness.portraitEdgeDensity,
+              });
+
+              container.appendChild(renderEntry(entry, result, reviewedPhoto));
+            } catch (error) {
+              const errorMessage = getErrorMessage(error);
+              failures.push({
+                sourcePath: entry.sourcePath,
+                error: errorMessage,
+              });
+              results.push({
+                sourcePath: entry.sourcePath,
+                error: errorMessage,
+              });
+              container.appendChild(renderErrorEntry(entry, errorMessage));
+            }
+          }
+
+          setProgress(
+            failures.length
+              ? `Validation finished with ${failures.length} failed case${failures.length === 1 ? '' : 's'}.`
+              : 'Validation complete.',
+          );
+          window.__validationLabComplete = true;
+          window.__validationLabSummary = results;
+          window.__validationLabError = failures.length
+            ? `${failures.length} validation case${failures.length === 1 ? '' : 's'} failed.`
+            : null;
+          window.__validationLabErrorDetail = failures.length
+            ? JSON.stringify(failures)
+            : null;
+        } catch (error) {
+          const errorMessage = getErrorMessage(error);
+          const safeMessage = errorMessage || 'Unknown validation error.';
+          container.innerHTML = `<div class="card"><h2>Validation failed</h2><p>${safeMessage}</p></div>`;
+          setProgress(`Validation failed: ${safeMessage}`);
+          window.__validationLabComplete = true;
+          window.__validationLabError = safeMessage;
+          window.__validationLabErrorDetail =
+            error instanceof Error && error.stack ? error.stack : safeMessage;
+        }
+      }
+
+      run();
+    </script>
+  </body>
+</html>

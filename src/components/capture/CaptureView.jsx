@@ -1,43 +1,101 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
+  ArrowRight,
   Camera,
-  CheckCircle2,
-  ImagePlus,
   RefreshCcw,
-  Sparkles,
   Upload,
 } from 'lucide-react';
 import { CAPTURE_MODES, VIEWS } from '../../lib/utils/constants';
 import { FlowShell } from '../flow/FlowShell';
-import { FlagMark } from '../shared/FlagMark';
 import { HeadGuideOverlay } from './HeadGuideOverlay';
 
-function SourceToggle({ mode, activeMode, onClick }) {
-  const isActive = mode === activeMode;
-  const label = mode === CAPTURE_MODES.camera ? 'Live camera' : 'Upload photo';
-  const Icon = mode === CAPTURE_MODES.camera ? Camera : ImagePlus;
+const PORTRAIT_RATIO = 3 / 4;
+const MAX_UPLOAD_LANDSCAPE_RATIO = 1.05;
 
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition ${
-        isActive ? 'bg-slate-950 text-white shadow-sm' : 'bg-white text-slate-700 hover:bg-slate-100'
-      }`}
-    >
-      <Icon className="h-4 w-4" />
-      {label}
-    </button>
-  );
+function getCameraApi() {
+  if (typeof navigator === 'undefined') {
+    return null;
+  }
+
+  if (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
+    return {
+      getUserMedia: (constraints) => navigator.mediaDevices.getUserMedia(constraints),
+    };
+  }
+
+  return null;
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error || new Error('Could not read the selected file.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImageMetrics(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () =>
+      resolve({
+        width: image.naturalWidth || image.width,
+        height: image.naturalHeight || image.height,
+      });
+    image.onerror = () => reject(new Error('Could not read the selected image.'));
+    image.src = dataUrl;
+  });
+}
+
+async function normalizePortraitUpload(file) {
+  const dataUrl = await readFileAsDataUrl(file);
+  const metrics = await loadImageMetrics(dataUrl);
+  const aspectRatio = metrics.width / Math.max(metrics.height, 1);
+
+  // Some square-ish uploads decode one pixel off in the browser
+  // (for example 600x599 WebP files). Keep rejecting clearly landscape
+  // photos, but allow near-square portraits that the crop pipeline can
+  // already handle safely.
+  if (aspectRatio > MAX_UPLOAD_LANDSCAPE_RATIO) {
+    throw new Error('Use a vertical selfie or portrait photo so we can process it correctly.');
+  }
+
+  return dataUrl;
+}
+
+function capturePortraitFromVideo(video) {
+  const sourceWidth = video.videoWidth;
+  const sourceHeight = video.videoHeight;
+  const targetWidth = Math.round(sourceHeight * PORTRAIT_RATIO);
+  const cropWidth = Math.min(sourceWidth, targetWidth);
+  const cropHeight = Math.round(cropWidth / PORTRAIT_RATIO);
+  const cropX = Math.round((sourceWidth - cropWidth) / 2);
+  const cropY = Math.max(0, Math.round((sourceHeight - cropHeight) / 2));
+
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+
+  if (!context) {
+    throw new Error('Could not capture the selfie preview.');
+  }
+
+  canvas.width = cropWidth;
+  canvas.height = cropHeight;
+  context.drawImage(video, cropX, cropY, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
+
+  return canvas.toDataURL('image/jpeg', 0.96);
 }
 
 export function CaptureView({
   selectedDocument,
   selectedPreset,
   captureMode,
+  draftPhoto,
+  onDraftChange,
   onCaptureModeChange,
-  onPhotoReady,
+  onContinue,
   onBack,
 }) {
   const videoRef = useRef(null);
@@ -46,45 +104,58 @@ export function CaptureView({
   const [stream, setStream] = useState(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState('');
-  const [draftPhoto, setDraftPhoto] = useState(null);
 
   const stopCamera = () => {
     const activeStream = streamRef.current;
     if (activeStream) {
       activeStream.getTracks().forEach((track) => track.stop());
     }
+
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
+
     streamRef.current = null;
     setStream(null);
     setCameraReady(false);
   };
 
-  const clearDraft = () => setDraftPhoto(null);
+  const openUploadPicker = () => {
+    fileInputRef.current?.click();
+  };
 
-  const handleModeChange = (nextMode) => {
+  const setMode = (mode) => {
     setCameraError('');
-    clearDraft();
-    if (nextMode === CAPTURE_MODES.upload) {
-      stopCamera();
-    }
-    onCaptureModeChange(nextMode);
+    onCaptureModeChange(mode);
   };
 
   useEffect(() => {
-    if (captureMode !== CAPTURE_MODES.camera || streamRef.current) {
+    if (captureMode !== CAPTURE_MODES.camera || draftPhoto) {
       return undefined;
     }
 
     let cancelled = false;
-    const videoNode = videoRef.current;
 
-    navigator.mediaDevices
-      .getUserMedia({
-        video: { facingMode: 'user' },
-      })
-      .then((mediaStream) => {
+    const startCamera = async () => {
+      try {
+        const cameraApi = getCameraApi();
+        if (!cameraApi) {
+          setCameraError('Camera preview is not available here. Upload a portrait photo instead.');
+          return;
+        }
+
+        if (typeof window !== 'undefined' && !window.isSecureContext) {
+          setCameraError('Camera preview needs HTTPS or localhost. Upload a portrait photo instead.');
+          return;
+        }
+
+        const mediaStream = await cameraApi.getUserMedia({
+          video: {
+            facingMode: { ideal: 'user' },
+            aspectRatio: { ideal: PORTRAIT_RATIO },
+          },
+        });
+
         if (cancelled) {
           mediaStream.getTracks().forEach((track) => track.stop());
           return;
@@ -92,30 +163,24 @@ export function CaptureView({
 
         streamRef.current = mediaStream;
         setStream(mediaStream);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setCameraError('Camera access was blocked. Switch to upload to continue.');
-        onCaptureModeChange(CAPTURE_MODES.upload);
-      });
+        setCameraError('');
+      } catch {
+        setCameraError('Camera access was blocked. Upload a portrait photo instead.');
+      }
+    };
+
+    startCamera();
 
     return () => {
       cancelled = true;
-      if (captureMode === CAPTURE_MODES.camera) {
-        const activeStream = streamRef.current;
-        if (activeStream) {
-          activeStream.getTracks().forEach((track) => track.stop());
-        }
-        if (videoNode) {
-          videoNode.srcObject = null;
-        }
-        streamRef.current = null;
-      }
+      stopCamera();
     };
-  }, [captureMode, onCaptureModeChange]);
+  }, [captureMode, draftPhoto]);
 
   useEffect(() => {
-    if (!stream || !videoRef.current) return undefined;
+    if (!stream || !videoRef.current) {
+      return undefined;
+    }
 
     const video = videoRef.current;
     const handleLoaded = () => {
@@ -125,290 +190,205 @@ export function CaptureView({
 
     video.srcObject = stream;
     video.addEventListener('loadedmetadata', handleLoaded);
+
     return () => video.removeEventListener('loadedmetadata', handleLoaded);
   }, [stream]);
 
-  const capturePhoto = () => {
-    if (!videoRef.current || !cameraReady) return;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = videoRef.current.videoWidth;
-    canvas.height = videoRef.current.videoHeight;
-    const context = canvas.getContext('2d');
-    context.translate(canvas.width, 0);
-    context.scale(-1, 1);
-    context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-    setDraftPhoto(canvas.toDataURL('image/jpeg', 0.92));
-  };
-
-  const handleFileUpload = (event) => {
+  const handleFileUpload = async (event) => {
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (!file) {
+      return;
+    }
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setDraftPhoto(reader.result);
-    };
-    reader.readAsDataURL(file);
-
-    if (event.target) {
-      event.target.value = '';
+    try {
+      const nextPhoto = await normalizePortraitUpload(file);
+      onDraftChange(nextPhoto);
+      setCameraError('');
+      stopCamera();
+    } catch (error) {
+      setCameraError(error instanceof Error ? error.message : 'Use a vertical selfie or portrait photo.');
+      onDraftChange(null);
+    } finally {
+      if (event.target) {
+        event.target.value = '';
+      }
     }
   };
 
-  const bestPracticeItems = [
-    'Look straight at the camera with a neutral expression.',
-    'Keep some space above the hair and include the shoulders.',
-    'Use even lighting and avoid shadows across the face.',
-    'Stand in front of a plain wall so the background stays easy to review.',
-  ];
+  const handleCapture = () => {
+    if (!videoRef.current || !cameraReady) {
+      return;
+    }
+
+    try {
+      const photo = capturePortraitFromVideo(videoRef.current);
+      onDraftChange(photo);
+      stopCamera();
+      setCameraError('');
+    } catch (error) {
+      setCameraError(error instanceof Error ? error.message : 'Could not capture the selfie.');
+    }
+  };
+
+  const handleRetake = () => {
+    onDraftChange(null);
+    setCameraError('');
+  };
+
+  const renderPreview = () => {
+    if (draftPhoto) {
+      return (
+        <div className="animate-scale-in relative h-full w-full">
+          <img src={draftPhoto} alt="Selected selfie preview" className="h-full w-full object-cover" />
+          <HeadGuideOverlay />
+        </div>
+      );
+    }
+
+    if (captureMode === CAPTURE_MODES.camera) {
+      if (stream) {
+        return (
+          <div className="relative h-full w-full">
+            <video
+              ref={videoRef}
+              autoPlay
+              muted
+              playsInline
+              className="h-full w-full object-cover"
+              style={{ transform: 'scaleX(-1)' }}
+            />
+            <HeadGuideOverlay />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center bg-gradient-to-t from-slate-950/70 via-slate-950/20 to-transparent px-4 pb-6 pt-16">
+              <button
+                type="button"
+                onClick={handleCapture}
+                disabled={!cameraReady}
+                aria-label="Capture photo"
+                className="tap-manipulation pointer-events-auto relative inline-flex h-[70px] w-[70px] items-center justify-center rounded-full bg-white shadow-[0_24px_40px_-18px_rgba(15,23,42,0.7)] transition duration-150 hover:scale-[1.02] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <span className="h-[54px] w-[54px] rounded-full border border-slate-200 bg-white" />
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center text-white">
+          <Camera className="h-12 w-12 text-sky-200" />
+          <div className="text-xl font-semibold">Getting your camera ready</div>
+          <p className="max-w-xs text-sm leading-6 text-slate-200">
+            Allow camera access when your browser asks.
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center text-white">
+        <Upload className="h-12 w-12 text-sky-200" />
+        <div className="text-xl font-semibold">Upload a photo</div>
+        <p className="max-w-xs text-sm leading-6 text-slate-200">
+          Use one clear face in the frame and we'll handle the rest.
+        </p>
+        <button type="button" onClick={openUploadPicker} className="primary-button w-full max-w-[260px] justify-center sm:w-auto">
+          <Upload className="h-4 w-4" />
+          Upload Image
+        </button>
+      </div>
+    );
+  };
 
   return (
     <FlowShell
       currentView={VIEWS.capture}
-      title="Capture or upload a clean source photo"
-      description="This step is only about getting a strong source image. The app handles the crop, size, white background, and export after you confirm the draft."
+      title="Take a selfie"
+      description="Use a straight-on photo with one face in frame. We'll handle the rest."
       onBack={onBack}
       backLabel="Back to document"
-      chip={
-        <span className="inline-flex items-center gap-2">
-          <FlagMark src={selectedDocument.flagPath} label={selectedDocument.countryLabel} size="sm" />
-          {selectedDocument.name}
-        </span>
-      }
+      chip="Step 2 of 4"
+      compactHeader
+      summaryItems={[
+        { label: 'Document', value: selectedDocument.countryLabel },
+        { label: 'Format', value: selectedPreset.officialSize || selectedPreset.label },
+      ]}
     >
-      <div className="grid gap-6 lg:grid-cols-[1.12fr_0.88fr]">
-        <div className="surface-card overflow-hidden p-5 sm:p-6 animate-fade-up">
-          <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="text-sm font-semibold text-slate-900">Source input</div>
-              <p className="mt-1 text-sm leading-6 text-slate-500">
-                Take a photo or upload one, then review the draft before processing begins.
+      <div className="workspace-grid">
+        <section className="workspace-main">
+          <div className="workspace-panel">
+            {cameraError ? (
+              <div className="mb-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{cameraError}</span>
+              </div>
+            ) : null}
+
+            <div className="rounded-[28px] bg-slate-950 p-4">
+              <div
+                className="relative mx-auto w-full max-w-[430px] overflow-hidden rounded-[24px] border border-white/10 bg-slate-900"
+                style={{ aspectRatio: '3 / 4' }}
+              >
+                {renderPreview()}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside className="workspace-side">
+          <div className="workspace-panel">
+            <div className="rounded-[24px] bg-slate-50 p-4">
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Choose how to start</div>
+              <div className="mt-4 grid gap-3">
+                <button
+                  type="button"
+                  onClick={() => setMode(CAPTURE_MODES.camera)}
+                  className={captureMode === CAPTURE_MODES.camera ? 'primary-button w-full justify-center' : 'secondary-button w-full justify-center'}
+                >
+                  <Camera className="h-4 w-4" />
+                  Use camera mode
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode(CAPTURE_MODES.upload)}
+                  className={captureMode === CAPTURE_MODES.upload ? 'primary-button w-full justify-center' : 'secondary-button w-full justify-center'}
+                >
+                  <Upload className="h-4 w-4" />
+                  Upload image mode
+                </button>
+              </div>
+            </div>
+
+            {draftPhoto ? (
+              <div className="workspace-footer">
+                <button type="button" onClick={handleRetake} className="secondary-button w-full justify-center sm:w-auto sm:mr-auto">
+                  <RefreshCcw className="h-4 w-4" />
+                  Retake Photo
+                </button>
+                <button type="button" onClick={onContinue} className="primary-button w-full justify-center sm:w-auto">
+                  <span>Use This Photo</span>
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+            ) : null}
+
+            <div className="rounded-[24px] border border-slate-200 bg-white p-4">
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Quick tip</div>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                Keep your phone upright, look straight at the camera, and leave a little space above your head.
               </p>
-            </div>
-            <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 p-1">
-              <SourceToggle
-                mode={CAPTURE_MODES.camera}
-                activeMode={captureMode}
-                onClick={() => handleModeChange(CAPTURE_MODES.camera)}
-              />
-              <SourceToggle
-                mode={CAPTURE_MODES.upload}
-                activeMode={captureMode}
-                onClick={() => handleModeChange(CAPTURE_MODES.upload)}
-              />
-            </div>
-          </div>
-
-          <div className="mt-6 space-y-5">
-            {captureMode === CAPTURE_MODES.camera ? (
-              <div className="overflow-hidden rounded-[32px] border border-slate-200 bg-slate-950 animate-scale-in">
-                <div className="relative aspect-[4/5]">
-                  {stream ? (
-                    <>
-                      <video
-                        ref={videoRef}
-                        autoPlay
-                        muted
-                        playsInline
-                        className="h-full w-full object-cover"
-                      />
-                      <HeadGuideOverlay />
-                      {!cameraReady ? (
-                        <div className="absolute inset-x-4 bottom-4 rounded-2xl bg-white/90 px-4 py-3 text-sm text-slate-700 shadow-lg backdrop-blur">
-                          Starting the live preview...
-                        </div>
-                      ) : null}
-                    </>
-                  ) : (
-                    <div className="flex h-full flex-col items-center justify-center gap-4 px-8 text-center text-white">
-                      <Camera className="h-14 w-14 text-blue-300" />
-                      <div className="text-xl font-semibold">Preparing the camera</div>
-                      <p className="max-w-md text-sm leading-6 text-slate-300">
-                        If camera access fails, switch to upload and continue with an existing
-                        source image.
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex flex-col gap-3 border-t border-white/10 bg-slate-950/85 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="text-sm text-slate-300">
-                    {cameraError ||
-                      'Keep your head centered inside the guide and make sure both shoulders stay in frame.'}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={capturePhoto}
-                    disabled={!cameraReady}
-                    className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <Camera className="h-4 w-4" />
-                    {draftPhoto ? 'Capture again' : 'Capture photo'}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-[32px] border border-dashed border-slate-300 bg-slate-50 p-8 text-center animate-scale-in">
-                <div className="mx-auto flex max-w-xl flex-col items-center">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-blue-50 text-blue-600">
-                    <Upload className="h-8 w-8" />
-                  </div>
-                  <h2 className="mt-6 text-2xl font-semibold text-slate-900">Upload an existing photo</h2>
-                  <p className="mt-3 max-w-lg text-sm leading-6 text-slate-600">
-                    Use a recent straight-on portrait with enough space around the head so the
-                    processor can crop it cleanly.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="primary-button mt-8"
-                  >
-                    <Upload className="h-4 w-4" />
-                    {draftPhoto ? 'Choose another image' : 'Select image'}
-                  </button>
-                  <p className="mt-4 text-xs uppercase tracking-[0.18em] text-slate-500">
-                    JPG, PNG, or HEIC converted by your browser
-                  </p>
-                </div>
-              </div>
-            )}
-
-            <div
-              className={`rounded-[32px] border p-5 sm:p-6 transition ${
-                draftPhoto
-                  ? 'border-emerald-200 bg-emerald-50 shadow-[0_28px_80px_-46px_rgba(16,185,129,0.55)]'
-                  : 'border-slate-200 bg-slate-50'
-              }`}
-            >
-              {draftPhoto ? (
-                <div className="grid gap-5 lg:grid-cols-[0.78fr_1.22fr]">
-                  <div className="rounded-[28px] bg-white p-3 shadow-sm">
-                    <div className="overflow-hidden rounded-[22px] border border-slate-200 bg-slate-100 aspect-[4/5]">
-                      <img src={draftPhoto} alt="Draft source photo" className="h-full w-full object-cover" />
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col justify-between gap-4">
-                    <div>
-                      <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 text-sm font-semibold text-emerald-700 shadow-sm">
-                        <CheckCircle2 className="h-4 w-4" />
-                        Draft photo ready
-                      </div>
-                      <h2 className="mt-4 text-2xl font-semibold text-slate-900">
-                        Review this draft before automatic processing
-                      </h2>
-                      <p className="mt-3 text-sm leading-6 text-slate-700">
-                        When you continue, the processor will prepare the selected document size,
-                        run the staged checks, and take you to the result screen.
-                      </p>
-
-                      <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                        <div className="rounded-3xl border border-emerald-200 bg-white p-4">
-                          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                            Document
-                          </div>
-                          <div className="mt-2 text-sm font-semibold text-slate-900">
-                            {selectedDocument.name}
-                          </div>
-                        </div>
-                        <div className="rounded-3xl border border-emerald-200 bg-white p-4">
-                          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                            Output
-                          </div>
-                          <div className="mt-2 text-sm font-semibold text-slate-900">
-                            {selectedPreset.officialSize || selectedPreset.label}
-                          </div>
-                        </div>
-                        <div className="rounded-3xl border border-emerald-200 bg-white p-4">
-                          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                            Export
-                          </div>
-                          <div className="mt-2 text-sm font-semibold text-slate-900">
-                            {selectedPreset.outputWidth} x {selectedPreset.outputHeight}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-3 sm:flex-row">
-                      <button
-                        type="button"
-                        onClick={
-                          captureMode === CAPTURE_MODES.camera
-                            ? clearDraft
-                            : () => {
-                                clearDraft();
-                                fileInputRef.current?.click();
-                              }
-                        }
-                        className="secondary-button justify-center"
-                      >
-                        <RefreshCcw className="h-4 w-4" />
-                        {captureMode === CAPTURE_MODES.camera ? 'Retake photo' : 'Replace photo'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onPhotoReady(draftPhoto)}
-                        className="primary-button justify-center"
-                      >
-                        <Sparkles className="h-4 w-4" />
-                        Process photo
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-start gap-3 text-sm leading-6 text-slate-600">
-                  <AlertCircle className="mt-0.5 h-5 w-5 text-blue-600" />
-                  Capture or upload a draft to unlock the processing step.
-                </div>
-              )}
-            </div>
-          </div>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleFileUpload}
-          />
-        </div>
-
-        <aside className="space-y-5 animate-slide-up">
-          <div className="surface-card p-6 sm:p-7">
-            <div className="text-sm font-semibold text-slate-900">Step guidance</div>
-            <div className="mt-4 grid gap-3">
-              {bestPracticeItems.map((item) => (
-                <div key={item} className="rounded-3xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
-                  {item}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="surface-card p-6 sm:p-7">
-            <div className="flex items-center gap-3">
-              <FlagMark src={selectedDocument.flagPath} label={selectedDocument.countryLabel} size="md" />
-              <div>
-                <div className="text-sm font-semibold text-slate-900">{selectedDocument.name}</div>
-                <div className="text-sm text-slate-500">{selectedDocument.authority}</div>
-              </div>
-            </div>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-              {selectedDocument.requirements.slice(0, 4).map((item) => (
-                <div key={item.label} className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                    {item.label}
-                  </div>
-                  <div className="mt-2 text-sm font-semibold text-slate-900">{item.value}</div>
-                </div>
-              ))}
             </div>
           </div>
         </aside>
       </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileUpload}
+      />
     </FlowShell>
   );
 }
+

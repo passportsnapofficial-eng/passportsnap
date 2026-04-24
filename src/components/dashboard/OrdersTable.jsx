@@ -3,8 +3,9 @@ import { formatCurrency, formatDate } from '../../lib/utils/formatters';
 import { FlagMark } from '../shared/FlagMark';
 
 function StatusBadge({ value }) {
+  const normalizedValue = String(value || '').toLowerCase();
   const tone =
-    value?.includes('Premium')
+    normalizedValue.includes('premium')
       ? 'bg-amber-50 text-amber-700'
       : 'bg-emerald-50 text-emerald-700';
 
@@ -84,7 +85,7 @@ export function OrdersTable({ orders, onDownload }) {
 
       <div className="grid gap-4 lg:hidden">
         {orders.map((order) => (
-          <article key={order.id} className="surface-card p-5">
+          <article key={order.id} className="surface-card p-5 animate-fade-up">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="flex items-center gap-3">
@@ -115,7 +116,7 @@ export function OrdersTable({ orders, onDownload }) {
               </div>
               <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:col-span-3">
                 <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  Payment reference
+                  Transaction ID
                 </div>
                 <div className="mt-2 truncate text-sm font-semibold text-slate-900">
                   {order.paymentReference || order.id}

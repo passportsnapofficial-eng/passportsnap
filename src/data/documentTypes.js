@@ -23,6 +23,7 @@ export const DOCUMENT_TYPES = COUNTRY_FORMATS.map((format) => ({
   requirementSummary: format.requirementSummary,
   captureHint: format.captureHint,
   requirements: format.rules,
+  validationPolicy: format.validationPolicy,
   officialSizeLabel: format.preset.officialSize,
   backgroundLabel: format.preset.background,
 }));

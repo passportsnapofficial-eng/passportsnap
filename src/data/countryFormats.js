@@ -44,6 +44,13 @@ export const COUNTRY_FORMATS = [
       { label: 'Background', value: 'White or off-white' },
       { label: 'Head size', value: '25 to 35 mm from chin to crown' },
     ],
+    validationPolicy: {
+      allowedBackgroundTones: ['white', 'cream'],
+      preferredBackgroundTones: ['white'],
+      requiresUnalteredPhoto: true,
+      allowBackgroundCleanup: false,
+      eyewearPolicy: 'forbidden',
+    },
   },
   {
     id: 'canada-passport',
@@ -84,6 +91,13 @@ export const COUNTRY_FORMATS = [
       { label: 'Background', value: 'Plain white or light-coloured' },
       { label: 'Face height', value: '31 to 36 mm from chin to crown' },
     ],
+    validationPolicy: {
+      allowedBackgroundTones: ['white', 'grey', 'cream'],
+      preferredBackgroundTones: ['white'],
+      requiresUnalteredPhoto: true,
+      allowBackgroundCleanup: false,
+      eyewearPolicy: 'conditional',
+    },
   },
   {
     id: 'uk-passport',
@@ -124,6 +138,13 @@ export const COUNTRY_FORMATS = [
       { label: 'Background', value: 'Plain light-coloured background' },
       { label: 'Head size', value: '29 to 34 mm from crown to chin' },
     ],
+    validationPolicy: {
+      allowedBackgroundTones: ['white', 'grey', 'cream'],
+      preferredBackgroundTones: ['white'],
+      requiresUnalteredPhoto: true,
+      allowBackgroundCleanup: false,
+      eyewearPolicy: 'conditional',
+    },
   },
   {
     id: 'schengen-visa',
@@ -164,6 +185,10 @@ export const COUNTRY_FORMATS = [
       { label: 'Background', value: 'Light background' },
       { label: 'Visibility', value: 'Full face, one person only' },
     ],
+    validationPolicy: {
+      allowedBackgroundTones: ['white', 'grey', 'cream'],
+      preferredBackgroundTones: ['white'],
+    },
   },
   {
     id: 'india-passport',
@@ -204,6 +229,10 @@ export const COUNTRY_FORMATS = [
       { label: 'Background', value: 'White or light background' },
       { label: 'Use case', value: 'Standard passport-size photo on Passport Seva paper guidance' },
     ],
+    validationPolicy: {
+      allowedBackgroundTones: ['white', 'cream'],
+      preferredBackgroundTones: ['white'],
+    },
   },
   {
     id: 'japan-visa',
@@ -244,6 +273,10 @@ export const COUNTRY_FORMATS = [
       { label: 'Orientation', value: 'Portrait photo, face forward' },
       { label: 'Background', value: 'Plain background with clear visibility' },
     ],
+    validationPolicy: {
+      allowedBackgroundTones: ['white', 'grey', 'cream'],
+      preferredBackgroundTones: ['white'],
+    },
   },
   {
     id: 'china-passport',
@@ -284,5 +317,9 @@ export const COUNTRY_FORMATS = [
       { label: 'Background', value: 'White or close to white' },
       { label: 'Head size', value: '28 to 33 mm high and 15 to 22 mm wide' },
     ],
+    validationPolicy: {
+      allowedBackgroundTones: ['white', 'cream'],
+      preferredBackgroundTones: ['white'],
+    },
   },
 ];

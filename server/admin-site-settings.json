@@ -1,0 +1,58 @@
+{
+  "currency": "USD",
+  "premiumRetouchFee": 7.99,
+  "watermarkText": "PASSPORTSNAP",
+  "watermarkEnabled": true,
+  "updatedAt": "2026-04-19T22:58:54.546Z",
+  "documents": [
+    {
+      "documentId": "us-passport",
+      "price": 14.99,
+      "isActive": true,
+      "displayOrder": 0,
+      "updatedAt": null
+    },
+    {
+      "documentId": "canada-passport",
+      "price": 15.99,
+      "isActive": true,
+      "displayOrder": 1,
+      "updatedAt": null
+    },
+    {
+      "documentId": "uk-passport",
+      "price": 12.99,
+      "isActive": true,
+      "displayOrder": 2,
+      "updatedAt": null
+    },
+    {
+      "documentId": "schengen-visa",
+      "price": 12.99,
+      "isActive": true,
+      "displayOrder": 3,
+      "updatedAt": null
+    },
+    {
+      "documentId": "india-passport",
+      "price": 13.99,
+      "isActive": true,
+      "displayOrder": 4,
+      "updatedAt": null
+    },
+    {
+      "documentId": "japan-visa",
+      "price": 14.99,
+      "isActive": true,
+      "displayOrder": 5,
+      "updatedAt": null
+    },
+    {
+      "documentId": "china-passport",
+      "price": 13.99,
+      "isActive": true,
+      "displayOrder": 6,
+      "updatedAt": null
+    }
+  ]
+}

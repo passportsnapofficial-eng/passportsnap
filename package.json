@@ -3,16 +3,27 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=20.19.0 <21 || >=22.12.0 <23"
+  },
   "scripts": {
     "dev": "node scripts/dev.mjs",
+    "dev:full": "node scripts/dev.mjs --with-legacy-ai",
     "dev:client": "vite --host 0.0.0.0 --port 5173",
-    "dev:server": "node server/paystackServer.mjs",
+    "dev:server": "node server/appServer.mjs",
+    "dev:legacy-ai": "python -m uvicorn services.legacy.background_removal.main:app --host 127.0.0.1 --port 8787",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "start": "node server/paystackServer.mjs --serve-dist"
+    "start": "node server/appServer.mjs --serve-dist",
+    "supabase:login": "npx supabase login",
+    "supabase:link": "npx supabase link",
+    "supabase:start": "npx supabase start",
+    "supabase:db:push": "npx supabase db push"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "^0.10.34",
+    "@supabase/supabase-js": "^2.101.1",
     "lucide-react": "^0.562.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"

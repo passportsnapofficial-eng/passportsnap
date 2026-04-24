@@ -1,19 +1,20 @@
 import { FOOTER_LINKS } from '../../data/siteContent';
+import { BrandLogo } from '../shared/BrandLogo';
 
-export function Footer({ onScrollToSection, onStartFlow, onOpenDashboard, onOpenAdmin }) {
+export function Footer({ onScrollToSection, onOpenDashboard, onOpenPrivacy, onOpenTerms }) {
   return (
-    <footer className="border-t border-white/10 bg-slate-950 text-slate-300">
-      <div className="mx-auto grid max-w-7xl gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[1.25fr_0.75fr_0.75fr_0.75fr] lg:px-8">
-        <div className="space-y-5">
-          <img src="/logo white.png" alt="Logo" className="h-10 w-auto" />
+    <footer className="relative overflow-hidden border-t border-white/10 bg-slate-950 text-slate-300">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.2),_transparent_26%),radial-gradient(circle_at_bottom_right,_rgba(14,165,233,0.16),_transparent_28%)]" />
+      <div className="relative mx-auto grid max-w-7xl gap-10 px-4 py-14 sm:px-6 sm:py-16 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr] lg:gap-12 lg:px-8">
+        <div className="space-y-4">
+          <BrandLogo variant="white" alt="Passportsnap" className="h-10 w-auto" />
           <p className="max-w-md text-sm leading-7 text-slate-400">
-            A guided automated passport-photo flow with dedicated capture, processing, result,
-            checkout, and download steps. Every document type listed on the site can move through
-            the same active workflow.
+            PassportSnap keeps passport-photo creation clear from document selection through download,
+            with one simple flow and no manual editing detours.
           </p>
-          <button type="button" onClick={() => onStartFlow('camera')} className="primary-button">
-            Start photo flow
-          </button>
+          <div className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.18em] text-slate-300">
+            Responsive photo workflow
+          </div>
         </div>
 
         <div>
@@ -56,30 +57,21 @@ export function Footer({ onScrollToSection, onStartFlow, onOpenDashboard, onOpen
               onClick={onOpenDashboard}
               className="text-left text-sm text-slate-400 transition hover:text-white"
             >
-              Orders dashboard
-            </button>
-            {onOpenAdmin ? (
-              <button
-                type="button"
-                onClick={onOpenAdmin}
-                className="text-left text-sm text-slate-400 transition hover:text-white"
-              >
-                Admin demo
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => window.alert('Privacy details will land with the backend release.')}
-              className="text-left text-sm text-slate-400 transition hover:text-white"
-            >
-              Privacy notice
+              Dashboard
             </button>
             <button
               type="button"
-              onClick={() => window.alert('Terms will land with the backend release.')}
+              onClick={onOpenPrivacy}
               className="text-left text-sm text-slate-400 transition hover:text-white"
             >
-              Terms of use
+              Privacy Policy
+            </button>
+            <button
+              type="button"
+              onClick={onOpenTerms}
+              className="text-left text-sm text-slate-400 transition hover:text-white"
+            >
+              Terms of Use
             </button>
           </div>
         </div>

@@ -1,18 +1,28 @@
-import { AlertCircle, ArrowRight, CheckCircle2, CreditCard, LoaderCircle, ShieldCheck } from 'lucide-react';
+import { AlertCircle, ArrowRight, CheckCircle2, CreditCard, LoaderCircle, RefreshCcw, ShieldCheck } from 'lucide-react';
 import { VIEWS } from '../../lib/utils/constants';
+import { formatCurrency } from '../../lib/utils/formatters';
 import { FlowShell } from '../flow/FlowShell';
 import { FlagMark } from '../shared/FlagMark';
+import { ProtectedPhotoPreview } from '../shared/ProtectedPhotoPreview';
 import { CartSummary } from './CartSummary';
 import { PremiumRetouchUpsell } from './PremiumRetouchUpsell';
 
 export function CheckoutView({
   cart,
   user,
+  authConfigured,
+  authLoading,
   totals,
   premiumRetouch,
+  premiumRetouchFee = 0,
+  premiumRetouchRequired = false,
   onTogglePremium,
   paymentState,
+  canRetryVerification,
+  onRetryVerification,
+  onOpenAuth,
   onBack,
+  backLabel = 'Back',
   onSubmit,
   loading,
 }) {
@@ -20,20 +30,28 @@ export function CheckoutView({
   const isVerifying = paymentState?.status === 'verifying';
   const isSuccess = paymentState?.status === 'success';
   const isError = paymentState?.status === 'error';
+  const requiresAuth = authConfigured && !authLoading && !user;
   const submitLabel = isVerifying
     ? 'Verifying payment...'
     : loading
-      ? 'Redirecting to Paystack...'
-      : 'Continue to Paystack';
+      ? 'Redirecting...'
+      : 'Continue to payment';
 
   return (
     <FlowShell
       currentView={VIEWS.checkout}
       title="Checkout and finalize the order"
-      description="Review the export, add premium retouch if needed, then complete the secure Paystack payment to unlock downloads."
+      description="Review the export, add premium retouch if needed, then complete secure checkout to unlock downloads."
       onBack={onBack}
-      backLabel="Back to result"
-      chip="Step 5 of 6"
+      backLabel={backLabel}
+      chip="Step 6 of 7"
+      compactHeader
+      summaryItems={[
+        { label: 'Document', value: primaryItem?.countryLabel || 'Order pending' },
+        { label: 'Size', value: primaryItem?.sizeLabel || 'Not available' },
+        { label: 'Items', value: `${cart.length}` },
+        { label: 'Total', value: formatCurrency(totals.total) },
+      ]}
     >
       <div className="grid gap-6 xl:grid-cols-[1.02fr_0.98fr]">
         <form onSubmit={onSubmit} className="surface-card p-6 sm:p-7 animate-fade-up">
@@ -44,13 +62,44 @@ export function CheckoutView({
             <div>
               <h2 className="text-2xl font-semibold text-slate-900">Secure checkout</h2>
               <p className="text-sm text-slate-500">
-                The final amount is sent to Paystack and the order is created only after payment
-                verification succeeds.
+                The order is created only after Stripe confirms the payment.
               </p>
             </div>
           </div>
 
           <div className="mt-8 grid gap-6">
+            {!authConfigured ? (
+              <div className="rounded-[28px] border border-amber-200 bg-amber-50 p-4 sm:p-5 text-sm leading-6 text-amber-900">
+                Account checkout is unavailable right now. Please try again later.
+              </div>
+            ) : null}
+
+            {requiresAuth ? (
+              <div className="rounded-[28px] border border-blue-200 bg-blue-50 p-5 sm:p-6">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm">
+                    <ShieldCheck className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-sm font-semibold text-slate-900">
+                      Sign in before payment
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                      Checkout is tied to a real account now so the paid order, downloads, and
+                      profile details stay in the dashboard across devices.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={onOpenAuth}
+                      className="secondary-button mt-4 justify-center"
+                    >
+                      Sign in to continue
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             {isVerifying || isSuccess || isError ? (
               <div
                 className={`rounded-[28px] border p-4 sm:p-5 ${
@@ -73,6 +122,17 @@ export function CheckoutView({
                   </div>
                   <div className="text-sm leading-6">{paymentState.message}</div>
                 </div>
+
+                {isError && canRetryVerification ? (
+                  <button
+                    type="button"
+                    onClick={onRetryVerification}
+                    className="secondary-button mt-4 justify-center"
+                  >
+                    <RefreshCcw className="h-4 w-4" />
+                    Check payment again
+                  </button>
+                ) : null}
               </div>
             ) : null}
 
@@ -87,7 +147,7 @@ export function CheckoutView({
                 <input
                   type="text"
                   name="firstName"
-                  defaultValue={user?.name?.split(' ')?.[0] || 'Demo'}
+                  defaultValue={user?.name?.split(' ')?.[0] || ''}
                   required
                   className="input-shell"
                   placeholder="First name"
@@ -95,7 +155,7 @@ export function CheckoutView({
                 <input
                   type="text"
                   name="lastName"
-                  defaultValue={user?.name?.split(' ')?.slice(1).join(' ') || 'Customer'}
+                  defaultValue={user?.name?.split(' ')?.slice(1).join(' ') || ''}
                   required
                   className="input-shell"
                   placeholder="Last name"
@@ -104,15 +164,16 @@ export function CheckoutView({
               <input
                 type="email"
                 name="email"
-                defaultValue={user?.email || 'customer@example.com'}
+                value={user?.email || ''}
+                readOnly
                 required
-                className="input-shell"
+                className="input-shell bg-slate-50 text-slate-500"
                 placeholder="Email address"
               />
               <input
                 type="text"
                 name="phone"
-                defaultValue=""
+                defaultValue={user?.phone || ''}
                 className="input-shell"
                 placeholder="Phone number"
               />
@@ -122,8 +183,8 @@ export function CheckoutView({
               <div>
                 <div className="text-sm font-semibold text-slate-900">Payment</div>
                 <p className="mt-1 text-sm text-slate-500">
-                  You will be redirected to Paystack to complete the payment on a secure checkout
-                  page that works across desktop and mobile browsers.
+                  You will be redirected to a secure Stripe-hosted payment page that works across
+                  desktop and mobile browsers.
                 </p>
               </div>
 
@@ -134,8 +195,8 @@ export function CheckoutView({
                   </div>
                   <div className="space-y-3 text-sm leading-6 text-slate-600">
                     <p>
-                      Paystack will charge the exact final total shown in this summary, including
-                      the premium retouch add-on if selected.
+                      The exact final total shown in this summary will be charged, including the
+                      premium retouch add-on if selected.
                     </p>
                     <p>
                       After payment returns to the app, the transaction is verified before the
@@ -153,12 +214,20 @@ export function CheckoutView({
                   Add manual review if the customer wants one more layer before final delivery.
                 </p>
               </div>
-              <PremiumRetouchUpsell enabled={premiumRetouch} onToggle={onTogglePremium} />
+              <PremiumRetouchUpsell enabled={premiumRetouch} fee={premiumRetouchFee} required={premiumRetouchRequired} onToggle={onTogglePremium} />
+              {premiumRetouchRequired ? (
+                <p className="text-sm leading-6 text-slate-500">
+                  At least one photo in this order needs paid background cleanup, so the add-on cannot be removed.
+                </p>
+              ) : null}
+              <p className="text-sm leading-6 text-slate-500">
+                Official acceptance still depends on the document authority. Some countries reject edited backgrounds or other altered photos.
+              </p>
             </section>
 
             <button
               type="submit"
-              disabled={loading || isVerifying || !cart.length}
+              disabled={loading || isVerifying || !cart.length || requiresAuth || !authConfigured || authLoading}
               className="primary-button w-full justify-center py-4 text-base"
             >
               {loading || isVerifying ? (
@@ -198,16 +267,14 @@ export function CheckoutView({
                 </div>
 
                 <div className="mt-4 overflow-hidden rounded-[22px] border border-slate-200 bg-white p-3">
-                  <div
+                  <ProtectedPhotoPreview
+                    src={primaryItem.photo}
+                    alt={primaryItem.documentName}
+                    watermarkEnabled={Boolean(primaryItem.backgroundRemovalApplied)}
                     className="bg-white"
-                    style={{ aspectRatio: `${primaryItem.outputWidth || 1} / ${primaryItem.outputHeight || 1}` }}
-                  >
-                    <img
-                      src={primaryItem.photo}
-                      alt={primaryItem.documentName}
-                      className="h-full w-full rounded-[18px] object-contain"
-                    />
-                  </div>
+                    imageClassName="rounded-[18px]"
+                    aspectRatio={`${primaryItem.outputWidth || 1} / ${primaryItem.outputHeight || 1}`}
+                  />
                 </div>
               </div>
             ) : null}
@@ -218,7 +285,7 @@ export function CheckoutView({
             subtotal={totals.subtotal}
             premiumFee={totals.premiumFee}
             total={totals.total}
-            footerNote="Downloads unlock after Paystack confirms the payment and the order is verified."
+            footerNote="Downloads unlock after payment is confirmed and the order is verified."
           />
         </div>
       </div>

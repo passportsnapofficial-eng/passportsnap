@@ -1,191 +1,180 @@
-import {
-  CheckCircle2,
-  Eye,
-  Image as ImageIcon,
-  LoaderCircle,
-  Ruler,
-  ScanFace,
-  ShieldCheck,
-  Sparkles,
-  SunMedium,
-} from 'lucide-react';
-import { VIEWS } from '../../lib/utils/constants';
+import { AlertCircle, CheckCircle2, LoaderCircle, Sparkles } from 'lucide-react';
+import { CAPTURE_MODES, VIEWS } from '../../lib/utils/constants';
 import { FlowShell } from '../flow/FlowShell';
-import { FlagMark } from '../shared/FlagMark';
 
-const STEP_ICONS = {
-  'detect-face': ScanFace,
-  'set-dimensions': Ruler,
-  'check-head-size': ShieldCheck,
-  'clean-background': Sparkles,
-  'optimize-clarity': SunMedium,
-  'check-expression': Eye,
-  'prepare-output': ImageIcon,
-  'final-quality': CheckCircle2,
-};
+const FRIENDLY_STEPS = [
+  {
+    label: 'Lining up your face',
+    keys: ['load-source', 'detect-face', 'validate-face'],
+  },
+  {
+    label: 'Cleaning up the background',
+    keys: ['segment-background', 'remove-background', 'build-canvas'],
+  },
+  {
+    label: 'Finishing your photo',
+    keys: ['analyze-lighting', 'detect-blur', 'check-output', 'finalize-result'],
+  },
+];
+
+function getFriendlyStatus(stepKeys, processingState) {
+  if (processingState.status === 'error') {
+    return 'pending';
+  }
+
+  if (stepKeys.every((key) => processingState.completedKeys.includes(key))) {
+    return 'complete';
+  }
+
+  if (stepKeys.includes(processingState.activeStepKey)) {
+    return 'active';
+  }
+
+  return 'pending';
+}
+
+function FriendlyStep({ label, status, style }) {
+  const icon =
+    status === 'complete' ? (
+      <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+    ) : status === 'active' ? (
+      <LoaderCircle className="h-5 w-5 animate-spin text-blue-600" />
+    ) : (
+      <div className="h-5 w-5 rounded-full border border-slate-300 bg-white" />
+    );
+
+  return (
+    <div
+      style={style}
+      className={`animate-fade-up flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 ${
+      status === 'active'
+        ? 'border-blue-200 bg-blue-50'
+        : status === 'complete'
+          ? 'border-emerald-200 bg-emerald-50'
+          : 'border-slate-200 bg-white'
+    }`}
+    >
+      <span className="text-sm font-semibold text-slate-900">{label}</span>
+      {icon}
+    </div>
+  );
+}
 
 export function ProcessingView({
   selectedDocument,
   selectedCountry,
   selectedPreset,
+  captureMode,
   sourcePhoto,
   processingState,
   onBack,
 }) {
-  const activeKey = processingState.activeStepKey;
+  const isError = processingState.status === 'error';
+  const rejectionReasons = Array.isArray(processingState.rejectionReasons)
+    ? processingState.rejectionReasons.filter(Boolean).slice(0, 5)
+    : [];
 
   return (
     <FlowShell
       currentView={VIEWS.processing}
-      title="Running the automated passport-photo checks"
-      description="The processor moves through each preparation stage deliberately so the user can understand what is happening before the final result screen appears."
+      title="We’ll handle the rest"
+      description="Give us a moment to clean up your selfie and get it ready."
       onBack={onBack}
-      backLabel="Back to capture"
-      chip={
-        <span className="inline-flex items-center gap-2">
-          <FlagMark src={selectedDocument.flagPath} label={selectedCountry} size="sm" />
-          {selectedPreset.officialSize || selectedPreset.label}
-        </span>
-      }
+      backLabel="Back to photo"
+      chip="Step 3 of 4"
+      compactHeader
+      summaryItems={[
+        { label: 'Document', value: selectedCountry },
+        { label: 'Format', value: selectedPreset.officialSize || selectedPreset.label },
+        { label: 'Source', value: captureMode === CAPTURE_MODES.camera ? 'Selfie' : 'Upload' },
+      ]}
     >
-      <div className="grid gap-6 xl:grid-cols-[1.04fr_0.96fr]">
-        <div className="surface-card overflow-hidden p-5 sm:p-6 animate-fade-up">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <div className="text-sm font-semibold text-slate-900">Live processing preview</div>
-              <div className="mt-1 text-sm text-slate-500">
-                Document framing and compliance-style guide overlay
-              </div>
-            </div>
-            <div className="rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700">
-              {processingState.progress}% complete
-            </div>
-          </div>
-
-          <div className="mt-6 rounded-[32px] bg-slate-950 p-4">
-            <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-slate-900">
-              <div className="relative aspect-square">
+      <div className="workspace-grid">
+        <section className="workspace-main">
+          <div className="workspace-panel">
+            <div className="rounded-[28px] bg-slate-950 p-4">
+              <div
+                className="relative mx-auto w-full max-w-[430px] overflow-hidden rounded-[24px] border border-white/10 bg-slate-900"
+                style={{ aspectRatio: '3 / 4' }}
+              >
                 {sourcePhoto ? (
-                  <img src={sourcePhoto} alt="Source preview" className="h-full w-full object-cover opacity-95" />
+                  <img src={sourcePhoto} alt="Selfie being processed" className="h-full w-full object-cover" />
                 ) : (
                   <div className="flex h-full items-center justify-center text-sm text-slate-300">
-                    Preparing preview
+                    Getting your photo ready
                   </div>
                 )}
-
-                <div className="absolute inset-[11%] rounded-[28px] border-2 border-white/70" />
-                <div className="absolute inset-x-[24%] top-[18%] h-[50%] rounded-[999px] border border-cyan-300/80" />
-                <div className="absolute inset-x-[18%] bottom-[17%] h-px bg-white/35" />
-                <div className="absolute left-1/2 top-[11%] h-[70%] w-px -translate-x-1/2 bg-white/15" />
-                <div className="absolute left-[12%] top-[22%] h-px w-[14%] bg-cyan-300/70" />
-                <div className="absolute right-[12%] top-[22%] h-px w-[14%] bg-cyan-300/70" />
-                <div
-                  className={`absolute left-[16%] top-[18%] h-[50%] w-px ${
-                    activeKey === 'check-head-size' ? 'bg-emerald-300 animate-pulse' : 'bg-white/20'
-                  }`}
-                />
-                <div
-                  className={`absolute right-[16%] top-[18%] h-[50%] w-px ${
-                    activeKey === 'check-head-size' ? 'bg-emerald-300 animate-pulse' : 'bg-white/20'
-                  }`}
-                />
-
-                <div className="absolute left-4 top-4 rounded-full border border-white/10 bg-slate-950/80 px-3 py-2 text-xs font-semibold text-white backdrop-blur">
-                  {selectedPreset.officialSize || selectedPreset.label}
-                </div>
-                <div className="absolute right-4 top-4 rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-100 backdrop-blur">
-                  Automated review
-                </div>
-                <div className="absolute bottom-4 left-4 right-4 rounded-[24px] border border-white/10 bg-slate-950/80 px-4 py-3 text-sm text-slate-200 backdrop-blur">
-                  Current stage: {processingState.steps.find((step) => step.key === activeKey)?.title || 'Preparing'}
+                <div className="absolute inset-x-4 bottom-4 rounded-[20px] bg-slate-950/82 px-4 py-3 text-sm text-white backdrop-blur">
+                  {isError ? 'We need one more photo to finish this.' : 'Working on your photo now.'}
                 </div>
               </div>
             </div>
-
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-4 text-white">
-                <div className="text-xs uppercase tracking-[0.18em] text-slate-300">Document</div>
-                <div className="mt-2 text-sm font-semibold">{selectedDocument.name}</div>
-              </div>
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-4 text-white">
-                <div className="text-xs uppercase tracking-[0.18em] text-slate-300">Export</div>
-                <div className="mt-2 text-sm font-semibold">
-                  {selectedPreset.outputWidth} x {selectedPreset.outputHeight}
-                </div>
-              </div>
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-4 text-white">
-                <div className="text-xs uppercase tracking-[0.18em] text-slate-300">Background</div>
-                <div className="mt-2 text-sm font-semibold">{selectedPreset.background}</div>
-              </div>
-            </div>
           </div>
-        </div>
+        </section>
 
-        <div className="surface-card p-6 sm:p-7 animate-slide-up">
-          <div className="text-sm font-semibold text-slate-900">Processing timeline</div>
-          <div className="mt-4 overflow-hidden rounded-full bg-slate-100">
-            <div
-              className="h-3 rounded-full bg-gradient-to-r from-blue-600 via-cyan-500 to-emerald-400 transition-all duration-500"
-              style={{ width: `${processingState.progress}%` }}
-            />
-          </div>
-
-          <div className="mt-6 space-y-3">
-            {processingState.steps.map((step) => {
-              const Icon = STEP_ICONS[step.key] || ShieldCheck;
-              const isComplete = processingState.completedKeys.includes(step.key);
-              const isActive = processingState.activeStepKey === step.key;
-
-              return (
-                <div
-                  key={step.key}
-                  className={`rounded-[28px] border p-4 transition ${
-                    isComplete
-                      ? 'border-emerald-100 bg-emerald-50'
-                      : isActive
-                        ? 'border-blue-100 bg-blue-50 shadow-[0_22px_54px_-36px_rgba(59,130,246,0.45)]'
-                        : 'border-slate-200 bg-white'
-                  }`}
-                >
-                  <div className="flex items-start gap-4">
-                    <div
-                      className={`mt-0.5 flex h-11 w-11 items-center justify-center rounded-2xl ${
-                        isComplete
-                          ? 'bg-white text-emerald-600 shadow-sm'
-                          : isActive
-                            ? 'bg-white text-blue-600 shadow-sm'
-                            : 'bg-slate-100 text-slate-500'
-                      }`}
-                    >
-                      {isActive ? (
-                        <LoaderCircle className="h-5 w-5 animate-spin" />
-                      ) : (
-                        <Icon className="h-5 w-5" />
-                      )}
-                    </div>
-
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="text-sm font-semibold text-slate-900">{step.title}</div>
-                        {isComplete ? (
-                          <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-700">
-                            Complete
-                          </span>
-                        ) : null}
-                        {isActive ? (
-                          <span className="rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-700">
-                            Running
-                          </span>
-                        ) : null}
-                      </div>
-                      <p className="mt-2 text-sm leading-6 text-slate-600">{step.description}</p>
-                    </div>
+        <aside className="workspace-side">
+          <div className="workspace-panel">
+            {isError ? (
+              <div className="rounded-[24px] border border-amber-200 bg-amber-50 p-4">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+                  <div>
+                    <div className="text-sm font-semibold text-amber-900">Let’s fix this</div>
+                    {rejectionReasons.length ? (
+                      <ul className="mt-3 space-y-2 text-sm leading-6 text-amber-900/80">
+                        {rejectionReasons.map((reason) => (
+                          <li key={reason} className="flex gap-2">
+                            <span aria-hidden="true">•</span>
+                            <span>{reason}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-1 text-sm leading-6 text-amber-900/80">
+                        {processingState.message || 'We could not finish this photo. Take one more and we will try again.'}
+                      </p>
+                    )}
                   </div>
                 </div>
-              );
-            })}
+              </div>
+            ) : (
+              <div className="animate-fade-up rounded-[24px] bg-slate-50 p-4">
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                  <Sparkles className="h-4 w-4 text-blue-600" />
+                  Getting it ready
+                </div>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Sit tight for a moment. We are polishing the crop, background, and final look.
+                </p>
+              </div>
+            )}
+
+            <div className="mt-4 space-y-3">
+              {FRIENDLY_STEPS.map((step, index) => (
+                <FriendlyStep
+                  key={step.label}
+                  label={step.label}
+                  status={getFriendlyStatus(step.keys, processingState)}
+                  style={{ animationDelay: `${index * 80}ms` }}
+                />
+              ))}
+            </div>
+
+            <div className="workspace-footer">
+              <button type="button" onClick={onBack} className="secondary-button w-full justify-center">
+                {isError ? 'Retake Photo' : 'Back'}
+              </button>
+            </div>
+
+            <div className="rounded-[24px] border border-slate-200 bg-white p-4">
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Selected document</div>
+              <div className="mt-3 text-sm font-semibold text-slate-900">{selectedDocument.name}</div>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                We are shaping this for {selectedDocument.countryLabel} while you wait.
+              </p>
+            </div>
           </div>
-        </div>
+        </aside>
       </div>
     </FlowShell>
   );

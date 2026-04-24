@@ -21,16 +21,16 @@ export function CartSummary({
         </div>
       </div>
 
-      <div className="mt-6 space-y-4">
-        <div className="flex items-center justify-between text-sm text-slate-600">
+      <div className="mt-6 space-y-3">
+        <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
           <span>Subtotal</span>
-          <span>{formatCurrency(subtotal)}</span>
+          <span className="font-semibold text-slate-900">{formatCurrency(subtotal)}</span>
         </div>
-        <div className="flex items-center justify-between text-sm text-slate-600">
-          <span>Premium retouch</span>
-          <span>{premiumFee ? formatCurrency(premiumFee) : 'Not added'}</span>
+        <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          <span>Premium retouch / cleanup</span>
+          <span className="font-semibold text-slate-900">{premiumFee ? formatCurrency(premiumFee) : 'Not added'}</span>
         </div>
-        <div className="border-t border-slate-200 pt-4">
+        <div className="rounded-[26px] border border-slate-200 bg-white px-4 py-4 shadow-[0_18px_42px_-34px_rgba(15,23,42,0.24)]">
           <div className="flex items-center justify-between text-base font-semibold text-slate-900">
             <span>Total</span>
             <span>{formatCurrency(total)}</span>

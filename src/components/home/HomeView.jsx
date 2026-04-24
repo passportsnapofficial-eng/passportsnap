@@ -1,25 +1,14 @@
-import { DOCUMENT_TYPES } from '../../data/documentTypes';
 import { HeroSection } from './HeroSection';
 import { HowItWorks } from './HowItWorks';
-import { ProcessPreviewSection } from './ProcessPreviewSection';
-import { ServicesGrid } from './ServicesGrid';
-import { Testimonials } from './Testimonials';
-import { TrustBar } from './TrustBar';
+import { TrustStrip } from './TrustStrip';
 
 export function HomeView({ onStartFlow }) {
   return (
-    <>
-      <HeroSection
-        onStartCamera={() => onStartFlow('camera')}
-        onStartUpload={() => onStartFlow('upload')}
-      />
-      <TrustBar />
-      <div className="bg-[linear-gradient(180deg,#ffffff_0%,#f8fbff_26%,#ffffff_100%)]">
-        <ServicesGrid documents={DOCUMENT_TYPES} onStartFlow={onStartFlow} />
-        <HowItWorks />
-        <ProcessPreviewSection />
-        <Testimonials />
-      </div>
-    </>
+    <main className="relative overflow-hidden bg-[linear-gradient(180deg,#020617_0%,#071326_14%,#0d1d35_26%,#1a3452_40%,#395777_54%,#6583a3_66%,#96afc6_76%,#c3d2e2_86%,#e8eff8_94%,#fbfdff_100%)]">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_16%_14%,rgba(56,189,248,0.12),transparent_18%),radial-gradient(circle_at_78%_22%,rgba(59,130,246,0.12),transparent_24%),linear-gradient(180deg,rgba(255,255,255,0)_0%,rgba(255,255,255,0.015)_38%,rgba(255,255,255,0.05)_56%,rgba(255,255,255,0.1)_72%,rgba(255,255,255,0.18)_100%)]" />
+      <HeroSection onStart={() => onStartFlow()} />
+      <TrustStrip />
+      <HowItWorks />
+    </main>
   );
 }

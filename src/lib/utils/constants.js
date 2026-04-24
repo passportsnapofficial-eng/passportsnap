@@ -2,6 +2,7 @@ export const VIEWS = {
   home: 'home',
   document: 'document',
   capture: 'capture',
+  review: 'review',
   processing: 'processing',
   result: 'result',
   cart: 'cart',
@@ -9,7 +10,35 @@ export const VIEWS = {
   success: 'success',
   dashboard: 'dashboard',
   admin: 'admin',
+  privacy: 'privacy',
+  terms: 'terms',
 };
+
+export const VIEW_PATHS = {
+  [VIEWS.home]: '/',
+  [VIEWS.document]: '/document',
+  [VIEWS.capture]: '/capture',
+  [VIEWS.review]: '/review',
+  [VIEWS.processing]: '/processing',
+  [VIEWS.result]: '/result',
+  [VIEWS.cart]: '/cart',
+  [VIEWS.checkout]: '/checkout',
+  [VIEWS.success]: '/success',
+  [VIEWS.dashboard]: '/dashboard',
+  [VIEWS.admin]: '/admin',
+  [VIEWS.privacy]: '/privacy',
+  [VIEWS.terms]: '/terms',
+};
+
+export function getPathForView(view) {
+  return VIEW_PATHS[view] || VIEW_PATHS[VIEWS.home];
+}
+
+export function getViewForPath(pathname = '/') {
+  const normalizedPath = pathname === '/' ? '/' : pathname.replace(/\/+$/, '');
+  const match = Object.entries(VIEW_PATHS).find(([, path]) => path === normalizedPath);
+  return match ? match[0] : VIEWS.home;
+}
 
 export const CAPTURE_MODES = {
   camera: 'camera',
@@ -18,12 +47,14 @@ export const CAPTURE_MODES = {
 
 export const RESULT_STATUSES = {
   passed: 'passed',
+  needsRetouch: 'needs_retouch',
   needsRetake: 'needs_retake',
 };
 
 export const CHECK_STATUSES = {
   passed: 'passed',
   failed: 'failed',
+  info: 'info',
 };
 
 export const STORAGE_KEYS = {
@@ -43,61 +74,71 @@ export const LEGACY_STORAGE_KEYS = {
 export const PREMIUM_RETOUCH_FEE = 7.99;
 
 export const FLOW_STEPS = [
-  { view: VIEWS.document, label: 'Choose document', shortLabel: 'Document' },
-  { view: VIEWS.capture, label: 'Capture or upload', shortLabel: 'Capture' },
-  { view: VIEWS.processing, label: 'Automatic processing', shortLabel: 'Process' },
-  { view: VIEWS.result, label: 'Review result', shortLabel: 'Result' },
-  { view: VIEWS.checkout, label: 'Checkout', shortLabel: 'Checkout' },
-  { view: VIEWS.success, label: 'Success', shortLabel: 'Done' },
+  { view: VIEWS.document, label: 'Document', shortLabel: 'Document' },
+  { view: VIEWS.capture, label: 'Take Photo', shortLabel: 'Photo' },
+  { view: VIEWS.processing, label: 'Getting Ready', shortLabel: 'Ready' },
+  { view: VIEWS.review, label: 'Download', shortLabel: 'Download' },
 ];
 
 export const PROCESSING_STEPS = [
   {
+    key: 'load-source',
+    title: 'Opening your photo',
+    description: 'Getting your photo ready.',
+    durationMs: 180,
+  },
+  {
     key: 'detect-face',
-    title: 'Detecting face',
-    description: 'Locating one centered face inside the capture frame.',
-    durationMs: 420,
+    title: 'Finding your face',
+    description: 'Lining everything up.',
+    durationMs: 260,
   },
   {
-    key: 'set-dimensions',
-    title: 'Setting official dimensions',
-    description: 'Applying the published canvas size for the selected format.',
-    durationMs: 360,
+    key: 'segment-background',
+    title: 'Separating you from the background',
+    description: 'Making room for a clean finish.',
+    durationMs: 220,
   },
   {
-    key: 'check-head-size',
-    title: 'Checking head size and proportions',
-    description: 'Measuring the subject against the published framing guidance.',
-    durationMs: 420,
+    key: 'remove-background',
+    title: 'Cleaning the background',
+    description: 'Brightening the backdrop.',
+    durationMs: 260,
   },
   {
-    key: 'clean-background',
-    title: 'Adjusting background to white',
-    description: 'Creating a clean white export surface around the portrait.',
-    durationMs: 500,
+    key: 'validate-face',
+    title: 'Checking your pose',
+    description: 'Looking for a straight, clear selfie.',
+    durationMs: 240,
   },
   {
-    key: 'optimize-clarity',
-    title: 'Optimizing brightness and clarity',
-    description: 'Balancing the image for a cleaner review preview.',
-    durationMs: 340,
+    key: 'analyze-lighting',
+    title: 'Checking the light',
+    description: 'Making sure your face is easy to see.',
+    durationMs: 220,
   },
   {
-    key: 'check-expression',
-    title: 'Ensuring visibility and neutral expression',
-    description: 'Running an initial check for face visibility and a steady forward pose.',
-    durationMs: 380,
+    key: 'detect-blur',
+    title: 'Checking the photo',
+    description: 'Making sure it stays clear.',
+    durationMs: 220,
   },
   {
-    key: 'prepare-output',
-    title: 'Preparing final output',
-    description: 'Packing the final JPG for checkout and dashboard delivery.',
-    durationMs: 300,
+    key: 'build-canvas',
+    title: 'Finishing your photo',
+    description: 'Putting it all together.',
+    durationMs: 260,
   },
   {
-    key: 'final-quality',
-    title: 'Final quality and resolution check',
-    description: 'Confirming minimum dimensions and export readiness before handoff.',
-    durationMs: 340,
+    key: 'check-output',
+    title: 'Final check',
+    description: 'Giving it one last look.',
+    durationMs: 180,
+  },
+  {
+    key: 'finalize-result',
+    title: 'Wrapping up',
+    description: 'Your photo is almost ready.',
+    durationMs: 160,
   },
 ];

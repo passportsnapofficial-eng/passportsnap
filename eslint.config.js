@@ -5,7 +5,18 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', '.vercel/**', 'public/mediapipe/**', '.edge-cdp/**']),
+  {
+    files: ['api/**/*.js', 'server/**/*.{js,mjs}', 'scripts/**/*.{js,mjs}', 'src/lib/**/*ServerCore.js'],
+    languageOptions: {
+      ecmaVersion: 2020,
+      globals: globals.node,
+      parserOptions: {
+        ecmaVersion: 'latest',
+        sourceType: 'module',
+      },
+    },
+  },
   {
     files: ['**/*.{js,jsx}'],
     extends: [

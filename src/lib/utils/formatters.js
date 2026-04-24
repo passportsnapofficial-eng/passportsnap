@@ -1,7 +1,7 @@
 import { CHECKOUT_CURRENCY } from '../checkout/pricing.js';
 
 export function formatCurrency(value) {
-  return new Intl.NumberFormat('en-GH', {
+  return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: CHECKOUT_CURRENCY,
   }).format(value);
@@ -28,9 +28,9 @@ export function slugify(value) {
     .trim();
 }
 
-export function formatDownloadFilename(item, orderId = '') {
-  const docSlug = slugify(item?.documentName || item?.name || 'passport-photo');
+export function formatDownloadFilename(item, ownerName = '') {
+  const ownerSlug = slugify(ownerName || item?.downloadOwnerName || 'customer');
+  const countrySlug = slugify(item?.countryLabel || item?.documentName || item?.name || 'passport-photo');
   const sizeSlug = slugify(item?.sizeLabel || '2x2');
-  const suffix = orderId ? `-${slugify(orderId)}` : '';
-  return `${docSlug}-${sizeSlug}${suffix}.jpg`;
+  return `${ownerSlug}-${countrySlug}-${sizeSlug}.jpg`;
 }

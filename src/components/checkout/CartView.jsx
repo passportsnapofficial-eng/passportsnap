@@ -1,6 +1,7 @@
 import { ShoppingCart, Trash2 } from 'lucide-react';
 import { formatCurrency } from '../../lib/utils/formatters';
 import { FlagMark } from '../shared/FlagMark';
+import { ProtectedPhotoPreview } from '../shared/ProtectedPhotoPreview';
 import { CartSummary } from './CartSummary';
 import { PremiumRetouchUpsell } from './PremiumRetouchUpsell';
 
@@ -8,6 +9,8 @@ export function CartView({
   cart,
   totals,
   premiumRetouch,
+  premiumRetouchFee = 0,
+  premiumRetouchRequired = false,
   onTogglePremium,
   onRemoveItem,
   onContinueShopping,
@@ -27,7 +30,7 @@ export function CartView({
               result, and it will appear here for checkout.
             </p>
             <button type="button" onClick={onContinueShopping} className="primary-button mt-8">
-              Start a passport photo
+              Start Photo
             </button>
           </div>
         </div>
@@ -44,7 +47,7 @@ export function CartView({
             <h1 className="mt-3 text-3xl font-semibold text-slate-900">Review your order before checkout.</h1>
           </div>
           <button type="button" onClick={onContinueShopping} className="secondary-button">
-            Add another photo
+            Start Photo
           </button>
         </div>
 
@@ -55,16 +58,14 @@ export function CartView({
                 <div className="flex flex-col gap-5 sm:flex-row">
                   <div className="w-full max-w-[180px] rounded-[28px] bg-slate-100 p-3">
                     <div className="overflow-hidden rounded-[22px] border border-slate-200 bg-white">
-                      <div
+                      <ProtectedPhotoPreview
+                        src={item.photo}
+                        alt={item.documentName}
+                        watermarkEnabled={Boolean(item.backgroundRemovalApplied)}
                         className="bg-white p-3"
-                        style={{ aspectRatio: `${item.outputWidth || 4} / ${item.outputHeight || 5}` }}
-                      >
-                        <img
-                          src={item.photo}
-                          alt={item.documentName}
-                          className="h-full w-full rounded-[18px] object-contain"
-                        />
-                      </div>
+                        imageClassName="rounded-[18px]"
+                        aspectRatio={`${item.outputWidth || 4} / ${item.outputHeight || 5}`}
+                      />
                     </div>
                   </div>
 
@@ -114,8 +115,15 @@ export function CartView({
                             Premium add-on
                           </div>
                           <div className="mt-2 text-sm font-semibold text-slate-900">
-                            {premiumRetouch ? 'Selected' : 'Not selected'}
+                            {item.requiresPremiumRetouch
+                              ? 'Required for this photo'
+                              : premiumRetouch
+                                ? 'Selected'
+                                : 'Not selected'}
                           </div>
+                          {item.premiumRetouchReason ? (
+                            <div className="mt-2 text-sm leading-6 text-slate-500">{item.premiumRetouchReason}</div>
+                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -137,8 +145,7 @@ export function CartView({
                 </div>
               </article>
             ))}
-
-            <PremiumRetouchUpsell enabled={premiumRetouch} onToggle={onTogglePremium} />
+            <PremiumRetouchUpsell enabled={premiumRetouch} fee={premiumRetouchFee} required={premiumRetouchRequired} onToggle={onTogglePremium} />
           </div>
 
           <div className="lg:sticky lg:top-28 lg:self-start">
@@ -147,9 +154,13 @@ export function CartView({
               subtotal={totals.subtotal}
               premiumFee={totals.premiumFee}
               total={totals.total}
-              ctaLabel="Continue to checkout"
+              ctaLabel="Checkout"
               onCta={onProceedToCheckout}
-              footerNote="Premium retouch applies once per order in this MVP and is saved into the order history."
+              footerNote={
+                premiumRetouchRequired
+                  ? 'Premium retouch is required for this order because at least one photo needs manual background cleanup.'
+                  : 'Premium retouch applies once per order and is saved into the order history.'
+              }
             />
           </div>
         </div>

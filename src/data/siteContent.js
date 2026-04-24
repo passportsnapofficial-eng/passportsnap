@@ -1,91 +1,64 @@
-export const HERO_TRUST_ITEMS = [
-  'Official size formatting',
-  'Automated initial compliance checks',
-  'Fast delivery after checkout',
+export const HERO_BADGES = [
+  'Sizing handled for you',
+  'Background fixed automatically',
+  'Compliance checked in one pass',
+  'Download-ready in seconds',
 ];
 
-export const HERO_STATS = [
-  { label: 'Prepared for download', value: 'JPG export in the flow' },
-  { label: 'Guided funnel', value: '6 dedicated product steps' },
-  { label: 'Supported formats', value: '7 active country profiles' },
+export const TRUST_STRIP_POINTS = [
+  '4.9/5 average customer rating',
+  'Selfie-friendly on phone or desktop',
+  'Built to feel like a premium done-for-you service',
 ];
 
-export const TRUST_BAR_ITEMS = [
-  { label: 'Customer rating', value: '4.9 / 5', detail: 'Demo review score framing' },
-  { label: 'Workflow', value: 'Automated review', detail: 'Guided before checkout' },
-  { label: 'Delivery', value: 'Prepared for download', detail: 'Saved to dashboard history' },
-  { label: 'Coverage', value: 'Multi-country support', detail: 'Every listed format is active' },
+export const FEATURE_CARDS = [
+  {
+    title: 'Done in minutes',
+    body: 'Take your photo at home, no studio, no waiting.',
+  },
+  {
+    title: 'Smart processing',
+    body: 'Auto crop, align, and adjust your photo instantly.',
+  },
+  {
+    title: 'Compliance ready',
+    body: 'Formatted to meet passport standards from the start.',
+  },
 ];
 
 export const HOW_IT_WORKS_STEPS = [
   {
-    title: 'Capture or upload',
-    description: 'Take a fresh photo with your webcam or upload one from your phone.',
+    title: 'Choose your document',
+    description: 'Pick the passport or visa format you need.',
   },
   {
-    title: 'Review format',
-    description: 'Confirm the document type, official size, and white-background requirement before processing.',
+    title: 'Take a selfie or upload',
+    description: 'Use your camera or add a portrait from your phone.',
   },
   {
     title: 'Automatic processing',
-    description: 'The processor runs through face position, dimensions, background, clarity, and export checks.',
+    description: 'We handle sizing, cropping, background, and checks.',
   },
   {
-    title: 'Review and order',
-    description: 'See the result, retake if needed, then continue to checkout and download.',
+    title: 'Download',
+    description: 'Your finished photo is ready to save right away.',
   },
 ];
 
-export const PROCESS_PREVIEW_ITEMS = [
-  {
-    title: 'Face detection',
-    body: 'Locates the subject and sets a centered composition for the export.',
-  },
-  {
-    title: 'Official dimensions',
-    body: 'Builds the canvas to match the selected country or document size.',
-  },
-  {
-    title: 'White background',
-    body: 'Prepares the final image on a clean light export surface.',
-  },
-  {
-    title: 'Export readiness',
-    body: 'Saves the prepared JPG for checkout, success, and dashboard downloads.',
-  },
-];
-
-export const TESTIMONIALS = [
-  {
-    id: 'mia-thompson',
-    name: 'Mia Thompson',
-    location: 'Austin, TX',
-    quote: 'The result screen made it obvious what passed, and I could retake before paying. That is exactly what I wanted.',
-    context: 'US passport renewal',
-  },
-  {
-    id: 'daniel-ortiz',
-    name: 'Daniel Ortiz',
-    location: 'Toronto, ON',
-    quote: 'I picked the exact format I needed, saw the checks run, and downloaded the final JPG without any manual editing.',
-    context: 'Travel document prep',
-  },
-  {
-    id: 'priya-nair',
-    name: 'Priya Nair',
-    location: 'Dubai, UAE',
-    quote: 'The capture guidance and quick retake loop are strong. I knew right away whether my photo was usable.',
-    context: 'Remote passport photo',
-  },
+export const CONSISTENCY_PROMISE_POINTS = [
+  'Select document once',
+  'Capture or upload photo',
+  'Review before processing',
+  'See result before payment',
+  'Download instantly',
 ];
 
 export const FOOTER_LINKS = {
   services: [
-    { id: 'pricing', label: 'Document Types' },
-    { id: 'process-preview', label: 'Product Preview' },
+    { id: 'documents', label: 'Supported Documents' },
   ],
   product: [
     { id: 'how-it-works', label: 'How It Works' },
-    { id: 'reviews', label: 'Customer Feedback' },
+    { id: 'consistency', label: 'One Simple Flow' },
   ],
 };

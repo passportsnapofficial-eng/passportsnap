@@ -1,0 +1,13 @@
+.git/
+.vercel/
+.vscode/
+.codex-logs/
+.edge-cdp/
+node_modules/
+dist/
+dist-ssr/
+Test/
+*.log
+*.err
+*.out
+.env.local
