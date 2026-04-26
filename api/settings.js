@@ -1,14 +1,8 @@
 import { getPublicSiteSettings } from '../src/lib/admin/adminServerCore.js';
-
-function setHeaders(response) {
-  response.setHeader('Access-Control-Allow-Origin', '*');
-  response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  response.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
-  response.setHeader('Content-Type', 'application/json');
-}
+import { sendError, setApiHeaders } from './_helpers.js';
 
 export default async function handler(request, response) {
-  setHeaders(response);
+  setApiHeaders(response, request, 'GET,OPTIONS');
 
   if (request.method === 'OPTIONS') {
     response.status(204).end();
@@ -24,8 +18,6 @@ export default async function handler(request, response) {
     const result = await getPublicSiteSettings();
     response.status(200).json(result);
   } catch (error) {
-    response.status(400).json({
-      message: error instanceof Error ? error.message : 'Unexpected server error.',
-    });
+    sendError(response, error, 'Unable to load site settings right now.');
   }
 }

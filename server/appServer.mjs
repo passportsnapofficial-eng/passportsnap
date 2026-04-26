@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { existsSync, readFileSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { timingSafeEqual } from 'node:crypto';
 import {
   authenticateAdmin,
   getAdminOverview,
@@ -27,6 +28,60 @@ const DEFAULT_PORT = Number(process.env.PORT || process.env.PAYMENTS_SERVER_PORT
 const MAX_PORT_ATTEMPTS = Number(process.env.PORT_FALLBACK_ATTEMPTS || 10);
 const SERVE_DIST = process.argv.includes('--serve-dist');
 
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+const SECURITY_HEADERS = {
+  'X-Frame-Options': 'DENY',
+  'X-Content-Type-Options': 'nosniff',
+  'X-XSS-Protection': '1; mode=block',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+};
+
+// In-memory rate limiter: tracks failed admin login attempts per IP.
+const loginAttempts = new Map();
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 10;
+
+function isLoginRateLimited(ip) {
+  const now = Date.now();
+  const entry = loginAttempts.get(ip);
+  if (!entry) return false;
+  if (now - entry.windowStart > LOGIN_WINDOW_MS) {
+    loginAttempts.delete(ip);
+    return false;
+  }
+  return entry.count >= LOGIN_MAX_ATTEMPTS;
+}
+
+function recordLoginAttempt(ip) {
+  const now = Date.now();
+  const entry = loginAttempts.get(ip);
+  if (!entry || now - entry.windowStart > LOGIN_WINDOW_MS) {
+    loginAttempts.set(ip, { count: 1, windowStart: now });
+  } else {
+    entry.count += 1;
+  }
+}
+
+function clearLoginAttempts(ip) {
+  loginAttempts.delete(ip);
+}
+
+function getClientIp(request) {
+  const forwarded = request.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string') return forwarded.split(',')[0].trim();
+  return request.socket?.remoteAddress || '0.0.0.0';
+}
+
+function resolveAllowedOrigin(requestOrigin) {
+  if (!requestOrigin) return null;
+  if (!ALLOWED_ORIGINS.length) return requestOrigin;
+  return ALLOWED_ORIGINS.includes(requestOrigin) ? requestOrigin : null;
+}
+
 function loadLocalEnv(filePath) {
   if (!existsSync(filePath)) return;
 
@@ -46,18 +101,27 @@ function loadLocalEnv(filePath) {
   }
 }
 
-function setBaseHeaders(response, statusCode, contentType = 'application/json', extraHeaders = {}) {
+function setBaseHeaders(response, statusCode, contentType = 'application/json', extraHeaders = {}, requestOrigin = '') {
+  const allowedOrigin = resolveAllowedOrigin(requestOrigin);
+  const corsHeaders = allowedOrigin
+    ? {
+        'Access-Control-Allow-Origin': allowedOrigin,
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-admin-token',
+        'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+        'Vary': 'Origin',
+      }
+    : {};
+
   response.writeHead(statusCode, {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-admin-token',
-    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    ...SECURITY_HEADERS,
+    ...corsHeaders,
     'Content-Type': contentType,
     ...extraHeaders,
   });
 }
 
-function sendJson(response, statusCode, payload) {
-  setBaseHeaders(response, statusCode);
+function sendJson(response, statusCode, payload, requestOrigin = '') {
+  setBaseHeaders(response, statusCode, 'application/json', {}, requestOrigin);
   response.end(JSON.stringify(payload));
 }
 
@@ -75,8 +139,8 @@ function getAdminTokenFromRequest(request) {
   return '';
 }
 
-function sendText(response, statusCode, message) {
-  setBaseHeaders(response, statusCode, 'text/plain; charset=utf-8');
+function sendText(response, statusCode, message, requestOrigin = '') {
+  setBaseHeaders(response, statusCode, 'text/plain; charset=utf-8', {}, requestOrigin);
   response.end(message);
 }
 
@@ -156,9 +220,14 @@ function serveStaticAsset(requestPath, response) {
     return;
   }
 
-  setBaseHeaders(response, 200, fileContentType(safePath), {
-    'Cache-Control': normalizedPath.endsWith('.html') ? 'no-store, max-age=0' : 'no-store, max-age=0',
-  });
+  const isFingerprinted = /\.[a-f0-9]{8,}\.[a-z]+$/.test(normalizedPath);
+  const cacheControl = normalizedPath.endsWith('.html')
+    ? 'no-store, max-age=0'
+    : isFingerprinted
+      ? 'public, max-age=31536000, immutable'
+      : 'no-store, max-age=0';
+
+  setBaseHeaders(response, 200, fileContentType(safePath), { 'Cache-Control': cacheControl });
   response.end(readFileSync(safePath));
 }
 
@@ -196,19 +265,36 @@ const server = createServer(async (request, response) => {
     return;
   }
 
+  const requestOrigin = request.headers.origin || '';
+
   if (request.method === 'OPTIONS') {
-    setBaseHeaders(response, 204);
+    setBaseHeaders(response, 204, 'application/json', {}, requestOrigin);
     response.end();
     return;
   }
 
   const requestUrl = new URL(request.url, `http://${request.headers.host || '127.0.0.1'}`);
+  const clientIp = getClientIp(request);
 
   try {
     if (request.method === 'POST' && requestUrl.pathname === '/api/admin/login') {
+      if (isLoginRateLimited(clientIp)) {
+        sendJson(response, 429, { message: 'Too many login attempts. Try again later.' }, requestOrigin);
+        return;
+      }
+
       const payload = await parseRequestBody(request);
-      const result = authenticateAdmin(payload.email, payload.password);
-      sendJson(response, 200, result);
+
+      try {
+        const result = authenticateAdmin(payload.email, payload.password);
+        clearLoginAttempts(clientIp);
+        sendJson(response, 200, result, requestOrigin);
+      } catch (authError) {
+        recordLoginAttempt(clientIp);
+        sendJson(response, 401, {
+          message: authError instanceof Error ? authError.message : 'Invalid admin credentials.',
+        }, requestOrigin);
+      }
       return;
     }
 
@@ -216,50 +302,50 @@ const server = createServer(async (request, response) => {
       const token = getAdminTokenFromRequest(request);
 
       if (!isValidAdminToken(token)) {
-        sendJson(response, 401, { message: 'Admin access denied.' });
+        sendJson(response, 401, { message: 'Admin access denied.' }, requestOrigin);
         return;
       }
 
       if (request.method === 'GET' && requestUrl.pathname === '/api/admin/overview') {
         const result = await getAdminOverview();
-        sendJson(response, 200, result);
+        sendJson(response, 200, result, requestOrigin);
         return;
       }
 
       if (request.method === 'POST' && requestUrl.pathname === '/api/admin/reviews') {
         const payload = await parseRequestBody(request);
         const result = await upsertAdminReviewRequest(payload);
-        sendJson(response, 200, result);
+        sendJson(response, 200, result, requestOrigin);
         return;
       }
 
       if (request.method === 'POST' && requestUrl.pathname === '/api/admin/settings') {
         const payload = await parseRequestBody(request);
         const result = await saveAdminSiteSettings(payload);
-        sendJson(response, 200, result);
+        sendJson(response, 200, result, requestOrigin);
         return;
       }
     }
 
     if (request.method === 'GET' && requestUrl.pathname === '/api/settings') {
       const result = await getPublicSiteSettings();
-      sendJson(response, 200, result);
+      sendJson(response, 200, result, requestOrigin);
       return;
     }
 
     if (request.method === 'POST' && requestUrl.pathname === '/api/stripe/initialize') {
       const payload = await parseRequestBody(request);
       const result = await initializeTransaction(payload, {
-        originHeader: request.headers.origin || '',
+        originHeader: requestOrigin,
       });
-      sendJson(response, 200, result);
+      sendJson(response, 200, result, requestOrigin);
       return;
     }
 
     if (request.method === 'GET' && requestUrl.pathname === '/api/stripe/verify') {
       const sessionId = requestUrl.searchParams.get('sessionId');
       const result = await verifyTransaction(sessionId);
-      sendJson(response, 200, result);
+      sendJson(response, 200, result, requestOrigin);
       return;
     }
 
@@ -278,7 +364,7 @@ const server = createServer(async (request, response) => {
         'X-Background-Transparent-Ratio': result.transparentRatio,
         'X-Background-Foreground-Ratio': result.foregroundRatio,
         'X-Background-Feather-Ratio': result.featherRatio,
-      });
+      }, requestOrigin);
       response.end(result.bodyBuffer);
       return;
     }
@@ -288,11 +374,21 @@ const server = createServer(async (request, response) => {
       return;
     }
 
-    sendJson(response, 404, { message: 'Route not found.' });
+    sendJson(response, 404, { message: 'Route not found.' }, requestOrigin);
   } catch (error) {
-    sendJson(response, 400, {
-      message: error instanceof Error ? error.message : 'Unexpected server error.',
-    });
+    const isClientError = error instanceof Error && (
+      error.message.includes('required') ||
+      error.message.includes('invalid') ||
+      error.message.includes('Invalid') ||
+      error.message.includes('missing') ||
+      error.message.includes('too large') ||
+      error.message.includes('JSON')
+    );
+    const statusCode = isClientError ? 400 : 500;
+    const message = isClientError
+      ? (error instanceof Error ? error.message : 'Bad request.')
+      : 'An unexpected error occurred. Please try again.';
+    sendJson(response, statusCode, { message }, requestOrigin);
   }
 });
 

@@ -1,7 +1,42 @@
 const REMOVE_BG_API_URL = 'https://api.remove.bg/v1.0/removebg';
 const REMOVE_BG_MODEL = 'remove_bg_api';
 const DEFAULT_TIMEOUT_MS = 30000;
-const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024; // 4 MB — sufficient for high-res passport portraits
+
+const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+// Magic byte signatures for supported image formats.
+const IMAGE_MAGIC = [
+  { bytes: [0xff, 0xd8, 0xff], mime: 'image/jpeg' },
+  { bytes: [0x89, 0x50, 0x4e, 0x47], mime: 'image/png' },
+  { bytes: [0x52, 0x49, 0x46, 0x46], mime: 'image/webp' }, // RIFF header (WebP)
+];
+
+function sniffImageMimeType(buffer) {
+  if (!buffer || buffer.length < 4) return null;
+  for (const sig of IMAGE_MAGIC) {
+    if (sig.bytes.every((byte, i) => buffer[i] === byte)) {
+      return sig.mime;
+    }
+  }
+  return null;
+}
+
+function validateImageFile(file, fileBuffer) {
+  const declaredType = (file.type || '').split(';')[0].trim().toLowerCase();
+  if (declaredType && !ALLOWED_IMAGE_MIME_TYPES.has(declaredType)) {
+    const error = new Error('Only JPEG, PNG, or WebP images are accepted.');
+    error.statusCode = 415;
+    throw error;
+  }
+
+  const sniffed = sniffImageMimeType(fileBuffer);
+  if (!sniffed) {
+    const error = new Error('The uploaded file does not appear to be a valid image.');
+    error.statusCode = 415;
+    throw error;
+  }
+}
 
 function normalizeTrimmedString(value) {
   const input = String(value || '').trim();
@@ -114,7 +149,10 @@ async function buildRemoveBgRequestBody(bodyBuffer, contentType) {
   removeBgFormData.append('format', 'png');
 
   if (uploadedFile instanceof Blob) {
-    removeBgFormData.append('image_file', uploadedFile, readFileName(uploadedFile));
+    const fileBuffer = Buffer.from(await uploadedFile.arrayBuffer());
+    validateImageFile(uploadedFile, fileBuffer);
+    const validatedBlob = new Blob([fileBuffer], { type: uploadedFile.type || 'image/jpeg' });
+    removeBgFormData.append('image_file', validatedBlob, readFileName(uploadedFile));
   } else {
     removeBgFormData.append('image_url', imageUrl);
   }

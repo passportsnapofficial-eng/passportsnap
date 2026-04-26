@@ -1,5 +1,6 @@
 import { Buffer } from 'node:buffer';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { timingSafeEqual } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, writeFile } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import process from 'node:process';
 import { DOCUMENT_TYPES, getDocumentById } from '../../data/documentTypes.js';
@@ -52,7 +53,12 @@ function writeJsonStore(filePath, payload) {
     mkdirSync(directory, { recursive: true });
   }
 
-  writeFileSync(filePath, JSON.stringify(payload, null, 2));
+  return new Promise((resolve, reject) => {
+    writeFile(filePath, JSON.stringify(payload, null, 2), 'utf8', (err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
 }
 
 function getStripeSecretKey() {
@@ -627,24 +633,45 @@ async function loadSiteSettings() {
   return readLocalSiteSettings();
 }
 
+function buildAdminToken() {
+  return Buffer.from(`${ADMIN_EMAIL}:${ADMIN_PASSWORD}`).toString('base64url');
+}
+
+function safeStringEquals(a, b) {
+  try {
+    const bufA = Buffer.from(String(a));
+    const bufB = Buffer.from(String(b));
+    if (bufA.length !== bufB.length) {
+      // Still run a comparison against itself to avoid timing differences.
+      timingSafeEqual(bufA, bufA);
+      return false;
+    }
+    return timingSafeEqual(bufA, bufB);
+  } catch {
+    return false;
+  }
+}
+
 export function authenticateAdmin(email, password) {
   const normalizedEmail = String(email || '').trim();
   const normalizedPassword = String(password || '').trim();
 
-  if (normalizedEmail !== ADMIN_EMAIL || normalizedPassword !== ADMIN_PASSWORD) {
+  const emailMatch = safeStringEquals(normalizedEmail, ADMIN_EMAIL);
+  const passwordMatch = safeStringEquals(normalizedPassword, ADMIN_PASSWORD);
+
+  if (!emailMatch || !passwordMatch) {
     throw new Error('Invalid admin credentials.');
   }
 
   return {
     email: ADMIN_EMAIL,
-    token: Buffer.from(`${ADMIN_EMAIL}:${ADMIN_PASSWORD}`).toString('base64url'),
+    token: buildAdminToken(),
   };
 }
 
 export function isValidAdminToken(token) {
   if (!token) return false;
-  const expectedToken = Buffer.from(`${ADMIN_EMAIL}:${ADMIN_PASSWORD}`).toString('base64url');
-  return String(token).trim() === expectedToken;
+  return safeStringEquals(String(token).trim(), buildAdminToken());
 }
 
 export async function listAdminReviewRequests() {
@@ -702,7 +729,7 @@ export async function upsertAdminReviewRequest(payload) {
   };
 
   const nextItems = [localItem, ...currentItems.filter((item) => item.id !== requestId)];
-  writeLocalReviewRequests(nextItems);
+  await writeLocalReviewRequests(nextItems);
   return localItem;
 }
 
@@ -725,7 +752,7 @@ export async function saveAdminSiteSettings(payload) {
     ...normalizedSettings,
     updatedAt: new Date().toISOString(),
   });
-  writeLocalSiteSettings(nextSettings);
+  await writeLocalSiteSettings(nextSettings);
   return nextSettings;
 }
 

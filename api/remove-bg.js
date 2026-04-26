@@ -1,8 +1,8 @@
 import {
   proxyBackgroundRemovalRequest,
   readRawRequestBody,
-  setBackgroundRemovalCorsHeaders,
 } from '../src/lib/backgroundRemoval/backgroundRemovalServerCore.js';
+import { sendError, setApiHeaders } from './_helpers.js';
 
 export const config = {
   api: {
@@ -11,7 +11,7 @@ export const config = {
 };
 
 export default async function handler(request, response) {
-  setBackgroundRemovalCorsHeaders(response);
+  setApiHeaders(response, request, 'POST,OPTIONS');
 
   if (request.method === 'OPTIONS') {
     response.status(204).end();
@@ -40,8 +40,6 @@ export default async function handler(request, response) {
     response.setHeader('X-Background-Feather-Ratio', result.featherRatio);
     response.status(result.statusCode).send(result.bodyBuffer);
   } catch (error) {
-    response.status(error?.statusCode || 502).json({
-      message: error instanceof Error ? error.message : 'Background removal failed.',
-    });
+    sendError(response, error, 'Background removal failed. Please try again.');
   }
 }

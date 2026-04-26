@@ -10,6 +10,8 @@ import { getPublicSiteSettings } from '../admin/adminServerCore.js';
 
 const STRIPE_API_BASE = 'https://api.stripe.com/v1';
 const PAYMENT_PROVIDER_TIMEOUT_MS = 15000;
+const MAX_CART_ITEMS = 10;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function getSecretKey() {
   const secretKey = process.env.STRIPE_SECRET_KEY || '';
@@ -32,6 +34,14 @@ export function buildOrderReference() {
 }
 
 export function normalizeCartItems(cartItems = [], siteSettings = null) {
+  if (!Array.isArray(cartItems) || cartItems.length === 0) {
+    throw new Error('A valid cart is required before payment.');
+  }
+
+  if (cartItems.length > MAX_CART_ITEMS) {
+    throw new Error(`Cart cannot exceed ${MAX_CART_ITEMS} items.`);
+  }
+
   return cartItems.map((item) => {
     const documentId = String(item?.documentId || '').trim();
     if (!documentId || !getDocumentPricing(documentId, siteSettings)) {
@@ -186,6 +196,10 @@ export async function initializeTransaction(payload, options = {}) {
 
   if (!email) {
     throw new Error('Email is required before payment.');
+  }
+
+  if (!EMAIL_RE.test(email)) {
+    throw new Error('A valid email address is required before payment.');
   }
 
   if (!cartItems.length) {

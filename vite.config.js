@@ -65,6 +65,12 @@ export default defineConfig(({ mode }) => {
             chunkInfo.name === 'passportValidationCompat'
               ? 'assets/passportValidationCompat.js'
               : 'assets/[name]-[hash].js',
+          manualChunks(id) {
+            if (id.includes('@mediapipe')) return 'mediapipe';
+            if (id.includes('@supabase')) return 'supabase';
+            if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) return 'react';
+            if (id.includes('/components/admin/') || id.includes('/lib/admin/')) return 'admin';
+          },
         },
       },
     },
