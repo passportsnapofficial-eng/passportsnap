@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { startTransition, useEffect, useRef, useState } from 'react';
 import {
   DEFAULT_DOCUMENT_ID,
   DOCUMENT_TYPES,
@@ -107,6 +107,7 @@ export function usePassportFlow(documentCatalog = DOCUMENT_TYPES) {
     const { replace = false } = options;
     const resolvedView = nextView === VIEWS.result ? VIEWS.review : nextView;
 
+    // URL + scroll must happen synchronously before any state update.
     if (typeof window !== 'undefined') {
       const nextPath = getPathForView(resolvedView);
       const nextUrl = `${nextPath}${window.location.search}${window.location.hash}`;
@@ -119,7 +120,11 @@ export function usePassportFlow(documentCatalog = DOCUMENT_TYPES) {
       window.scrollTo(0, 0);
     }
 
-    setView(resolvedView);
+    // Mark the view switch as non-urgent so the browser can paint
+    // button feedback before committing the full re-render.
+    startTransition(() => {
+      setView(resolvedView);
+    });
   }
 
   useEffect(() => {

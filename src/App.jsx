@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { AdminView } from './components/admin/AdminView';
 import { AuthDialog } from './components/auth/AuthDialog';
 import { CartView } from './components/checkout/CartView';
@@ -219,6 +219,7 @@ export default function App() {
   const documentCatalog = buildActiveDocumentCatalog(siteSettings);
   const flow = usePassportFlow(documentCatalog);
   const auth = useSupabaseAuth();
+  const [isNavigating, startNavigation] = useTransition();
   const [cart, setCart] = useLocalStorage(STORAGE_KEYS.cart, [], LEGACY_STORAGE_KEYS.cart);
   const [localOrders, setLocalOrders] = useLocalStorage(STORAGE_KEYS.orders, [], LEGACY_STORAGE_KEYS.orders);
   const [cartOptions, setCartOptions] = useLocalStorage(STORAGE_KEYS.cartOptions, {
@@ -792,28 +793,32 @@ export default function App() {
       return;
     }
 
-    setCart((current) => {
-      const nextCart = current.filter((item) => item.resultId !== checkoutItem.resultId);
-      return [checkoutItem, ...nextCart];
-    });
-    setCheckoutOrigin(VIEWS.result);
-    setPaymentState({ status: 'idle', message: '' });
-
-    if (!auth.configured) {
-      setPaymentState({
-        status: 'error',
-        message: 'Secure checkout is unavailable right now. Please try again later.',
-      });
-      flow.navigate(VIEWS.checkout);
-      return;
-    }
-
-    if (!auth.loading && !auth.user) {
+    // Auth dialog must open immediately (synchronous), not inside a transition.
+    if (!auth.loading && !auth.user && auth.configured) {
       openAuthDialog('signin', VIEWS.checkout);
       return;
     }
 
-    flow.navigate(VIEWS.checkout);
+    // Batch all cart mutations + the view switch together as a single
+    // non-urgent transition so the button paints feedback instantly.
+    startNavigation(() => {
+      setCart((current) => {
+        const nextCart = current.filter((item) => item.resultId !== checkoutItem.resultId);
+        return [checkoutItem, ...nextCart];
+      });
+      setCheckoutOrigin(VIEWS.result);
+
+      if (!auth.configured) {
+        setPaymentState({
+          status: 'error',
+          message: 'Secure checkout is unavailable right now. Please try again later.',
+        });
+      } else {
+        setPaymentState({ status: 'idle', message: '' });
+      }
+
+      flow.navigate(VIEWS.checkout);
+    });
   };
 
   const renderCurrentView = () => {
@@ -849,6 +854,7 @@ export default function App() {
           <ReviewView
             result={flow.result}
             captureMode={flow.captureMode}
+            isNavigating={isNavigating}
             onDownload={handleFlowDownload}
             onRetake={flow.retakePhoto}
             onBack={() => flow.navigate(VIEWS.capture)}
@@ -882,6 +888,7 @@ export default function App() {
           <ReviewView
             result={flow.result}
             captureMode={flow.captureMode}
+            isNavigating={isNavigating}
             onDownload={handleFlowDownload}
             onRetake={flow.retakePhoto}
             onBack={() => flow.navigate(VIEWS.capture)}

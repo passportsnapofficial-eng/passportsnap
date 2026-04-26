@@ -1,4 +1,4 @@
-import { CheckCircle2, Download, RefreshCcw, Sparkles } from 'lucide-react';
+import { CheckCircle2, Download, Loader2, RefreshCcw, Sparkles } from 'lucide-react';
 import { CAPTURE_MODES, VIEWS } from '../../lib/utils/constants';
 import { FlowShell } from '../flow/FlowShell';
 import { FlagMark } from '../shared/FlagMark';
@@ -37,6 +37,7 @@ function getReviewCopy(result) {
 export function ReviewView({
   result,
   captureMode,
+  isNavigating = false,
   onDownload,
   onRetake,
   onBack,
@@ -172,13 +173,23 @@ export function ReviewView({
                 <button
                   type="button"
                   onClick={onDownload}
-                  className="primary-button w-full justify-center"
+                  disabled={isNavigating}
+                  className="primary-button w-full justify-center disabled:opacity-70 disabled:cursor-not-allowed"
                 >
-                  <Download className="h-4 w-4" />
-                  {copy.ctaLabel}
+                  {isNavigating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                  {isNavigating ? 'Opening checkout…' : copy.ctaLabel}
                 </button>
               ) : null}
-              <button type="button" onClick={onRetake} className="secondary-button w-full justify-center">
+              <button
+                type="button"
+                onClick={onRetake}
+                disabled={isNavigating}
+                className="secondary-button w-full justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 <RefreshCcw className="h-4 w-4" />
                 {copy.canCheckout ? 'Retake Photo' : copy.ctaLabel}
               </button>
