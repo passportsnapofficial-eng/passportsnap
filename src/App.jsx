@@ -36,6 +36,7 @@ import {
   VIEWS,
 } from './lib/utils/constants';
 import { formatDownloadFilename } from './lib/utils/formatters';
+import { saveStoredValue } from './lib/utils/storage';
 
 const PRIVACY_SECTIONS = [
   {
@@ -1057,11 +1058,19 @@ export default function App() {
         returnUrl: buildStripeReturnUrl(),
       });
 
-      setPendingPayment({
+      // Keep the persisted snapshot lean: drop the heavy original upload
+      // (sourcePhoto) so the pending-payment write reliably fits in localStorage.
+      // Storing the full cart twice (ps_cart + this snapshot) could exceed the
+      // quota, the write was silently dropped, and the Stripe return then found
+      // an empty cart ("payment verified, but no items"). The deliverable photo
+      // is kept so the order can always be rebuilt on return.
+      const leanCartSnapshot = cart.map((item) => ({ ...item, sourcePhoto: '' }));
+
+      const pendingPaymentRecord = {
         sessionId: initializedPayment.sessionId,
         orderReference: initializedPayment.orderReference,
         userId: auth.user?.id || null,
-        cartSnapshot: cart,
+        cartSnapshot: leanCartSnapshot,
         checkoutOptions,
         email,
         firstName,
@@ -1079,7 +1088,14 @@ export default function App() {
         amountMinor: initializedPayment.amountMinor,
         currency: initializedPayment.currency,
         createdAt: new Date().toISOString(),
-      });
+      };
+
+      setPendingPayment(pendingPaymentRecord);
+      // Persist synchronously BEFORE redirecting to Stripe. The useLocalStorage
+      // effect that normally writes this would not flush before
+      // window.location.assign tears the page down, so the cart snapshot was
+      // lost and the return showed "payment verified, but no items in the cart".
+      saveStoredValue(STORAGE_KEYS.pendingPayment, pendingPaymentRecord);
 
       window.location.assign(initializedPayment.checkoutUrl);
     } catch (error) {
