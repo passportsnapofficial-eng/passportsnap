@@ -15,9 +15,9 @@ const CARD_PALETTES = [
   { header: 'bg-pink-50/60', chip: 'bg-pink-100 text-pink-700' },
 ];
 
-function IcaoCompliantIcon(props) {
+function IcaoCompliantIcon({ size = 24, ...props }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
       <path
         d="M12 3.25 19 6.1v5.25c0 4.25-2.85 7.95-7 9.4-4.15-1.45-7-5.15-7-9.4V6.1l7-2.85Z"
         stroke="currentColor"
