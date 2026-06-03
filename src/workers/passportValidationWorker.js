@@ -1532,7 +1532,15 @@ export async function validatePassportPhotoPayload(payload, options = {}) {
   );
 
   postStage('build-canvas', { requestId, onStageChange });
-  const exportCanvas = createCanvas(preset.outputWidth, preset.outputHeight);
+  // Render the delivered photo at a higher pixel density than the spec size so
+  // detail from the high-res source survives. The spec dimensions
+  // (preset.outputWidth/Height) still drive aspect ratio and source-resolution
+  // validation; only the delivered pixels are denser (600px @ 300 DPI spec ->
+  // 1200px @ 600 DPI delivered for the US 2x2in photo).
+  const EXPORT_RESOLUTION_SCALE = 2;
+  const exportWidth = Math.round(preset.outputWidth * EXPORT_RESOLUTION_SCALE);
+  const exportHeight = Math.round(preset.outputHeight * EXPORT_RESOLUTION_SCALE);
+  const exportCanvas = createCanvas(exportWidth, exportHeight);
   const exportContext = exportCanvas.getContext('2d');
 
   if (!exportContext) {
@@ -1540,7 +1548,7 @@ export async function validatePassportPhotoPayload(payload, options = {}) {
   }
 
   exportContext.fillStyle = '#ffffff';
-  exportContext.fillRect(0, 0, preset.outputWidth, preset.outputHeight);
+  exportContext.fillRect(0, 0, exportWidth, exportHeight);
   exportContext.imageSmoothingEnabled = true;
   exportContext.imageSmoothingQuality = 'high';
   exportContext.drawImage(
@@ -1551,8 +1559,8 @@ export async function validatePassportPhotoPayload(payload, options = {}) {
     crop.height * exportScaleY,
     0,
     0,
-    preset.outputWidth,
-    preset.outputHeight,
+    exportWidth,
+    exportHeight,
   );
 
   postStage('check-output', { requestId, onStageChange });
@@ -1564,8 +1572,8 @@ export async function validatePassportPhotoPayload(payload, options = {}) {
   return {
     dataUrl: exportDataUrl,
     blob: exportBlob,
-    outputWidth: preset.outputWidth,
-    outputHeight: preset.outputHeight,
+    outputWidth: exportWidth,
+    outputHeight: exportHeight,
     targetAspectRatio,
     sourceWidth,
     sourceHeight,
@@ -1611,8 +1619,8 @@ export async function validatePassportPhotoPayload(payload, options = {}) {
       technical: {
         sourceWidth,
         sourceHeight,
-        outputWidth: preset.outputWidth,
-        outputHeight: preset.outputHeight,
+        outputWidth: exportWidth,
+        outputHeight: exportHeight,
         outputAspectRatio: preset.outputWidth / preset.outputHeight,
       },
     },

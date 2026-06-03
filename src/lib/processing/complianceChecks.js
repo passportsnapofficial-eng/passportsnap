@@ -268,9 +268,20 @@ export function buildComplianceChecks(processed, preset, documentType = null) {
   const outputAspect = processed.outputWidth / processed.outputHeight;
   const targetAspect = processed.targetAspectRatio;
   const normalizedForDownload = Boolean(processed.analysis?.technical?.normalizedForDownload);
+  // A normalized download is accepted at any pixel size as long as it keeps the
+  // target aspect ratio and meets at least the spec resolution. This decouples
+  // the delivered resolution from the spec dimensions so the export can be
+  // rendered denser (e.g. 1200px) without failing dimension validation.
+  const aspectMatchesTarget =
+    Number.isFinite(outputAspect) &&
+    Number.isFinite(targetAspect) &&
+    Math.abs(outputAspect - targetAspect) <= 0.02;
+  const meetsSpecResolution =
+    Math.min(processed.outputWidth, processed.outputHeight) >=
+    Math.min(preset.outputWidth, preset.outputHeight);
   const outputDimensionsAccepted =
     (processed.outputWidth === preset.outputWidth && processed.outputHeight === preset.outputHeight) ||
-    (normalizedForDownload && processed.outputWidth === 600 && processed.outputHeight === 600);
+    (normalizedForDownload && aspectMatchesTarget && meetsSpecResolution);
   const resolutionThreshold = getResolutionThreshold(preset);
   const {
     allowedBackgroundTones,

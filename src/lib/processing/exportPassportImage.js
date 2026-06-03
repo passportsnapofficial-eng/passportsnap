@@ -8,7 +8,9 @@ import {
 } from './mediapipeVision';
 import { runPassportValidationWorker } from './passportValidationWorkerClient';
 
-const STANDARD_EXPORT_SIZE = 600;
+// Delivered at 1200px (600 DPI for a 2x2in photo) so the final image keeps
+// detail from high-res uploads instead of being capped at the 600px minimum.
+const STANDARD_EXPORT_SIZE = 1200;
 const MIN_FILE_SIZE_BYTES = 54 * 1024;
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 const TARGET_HEAD_RATIO = 0.58;
