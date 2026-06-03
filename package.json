@@ -8,10 +8,11 @@
   },
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "dev:full": "node scripts/dev.mjs --with-legacy-ai",
+    "dev:full": "node scripts/dev.mjs --with-legacy-ai --with-image-enhancer",
     "dev:client": "vite --host 0.0.0.0 --port 5173",
     "dev:server": "node server/appServer.mjs",
     "dev:legacy-ai": "python -m uvicorn services.legacy.background_removal.main:app --host 127.0.0.1 --port 8787",
+    "dev:image-enhancer": "python -m uvicorn services.image_enhancement.main:app --host 127.0.0.1 --port 8788",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
@@ -26,7 +27,8 @@
     "@supabase/supabase-js": "^2.101.1",
     "lucide-react": "^0.562.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "zipcodes": "^8.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -38,6 +40,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
+    "playwright": "^1.60.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "vite": "^7.2.4"

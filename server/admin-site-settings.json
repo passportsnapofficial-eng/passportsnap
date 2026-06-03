@@ -1,57 +1,70 @@
 {
   "currency": "USD",
-  "premiumRetouchFee": 7.99,
+  "premiumRetouchFee": 5.99,
+  "digitalPrintFee": 3,
+  "digitalPrint2CopyFee": 3,
+  "digitalPrint4CopyFee": 3,
+  "digitalPrint6CopyFee": 6,
+  "complianceCheckFee": 3.99,
+  "photoRetouchingFee": 2.99,
   "watermarkText": "PASSPORTSNAP",
   "watermarkEnabled": true,
-  "updatedAt": "2026-04-19T22:58:54.546Z",
+  "updatedAt": "2026-05-22T12:47:55.921Z",
   "documents": [
     {
       "documentId": "us-passport",
-      "price": 14.99,
+      "price": 12.95,
       "isActive": true,
       "displayOrder": 0,
       "updatedAt": null
     },
     {
-      "documentId": "canada-passport",
-      "price": 15.99,
+      "documentId": "us-baby-passport",
+      "price": 12.95,
       "isActive": true,
       "displayOrder": 1,
       "updatedAt": null
     },
     {
-      "documentId": "uk-passport",
-      "price": 12.99,
+      "documentId": "canada-passport",
+      "price": 10.99,
       "isActive": true,
       "displayOrder": 2,
       "updatedAt": null
     },
     {
-      "documentId": "schengen-visa",
-      "price": 12.99,
+      "documentId": "uk-passport",
+      "price": 8.99,
       "isActive": true,
       "displayOrder": 3,
       "updatedAt": null
     },
     {
-      "documentId": "india-passport",
-      "price": 13.99,
+      "documentId": "schengen-visa",
+      "price": 8.99,
       "isActive": true,
       "displayOrder": 4,
       "updatedAt": null
     },
     {
-      "documentId": "japan-visa",
-      "price": 14.99,
+      "documentId": "india-passport",
+      "price": 8.99,
       "isActive": true,
       "displayOrder": 5,
       "updatedAt": null
     },
     {
-      "documentId": "china-passport",
-      "price": 13.99,
+      "documentId": "japan-visa",
+      "price": 9.99,
       "isActive": true,
       "displayOrder": 6,
+      "updatedAt": null
+    },
+    {
+      "documentId": "china-passport",
+      "price": 8.99,
+      "isActive": true,
+      "displayOrder": 7,
       "updatedAt": null
     }
   ]

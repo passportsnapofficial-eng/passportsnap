@@ -5,6 +5,7 @@ import { dirname, resolve } from 'node:path';
 import process from 'node:process';
 import { DOCUMENT_TYPES, getDocumentById } from '../../data/documentTypes.js';
 import { fromMinorUnits } from '../checkout/pricing.js';
+import { sendOrderDeliveryEmail } from '../email/orderDeliveryCore.js';
 import { normalizeSiteSettings } from '../settings/siteSettings.js';
 
 const STRIPE_API_BASE = 'https://api.stripe.com/v1';
@@ -12,6 +13,8 @@ const LOCAL_REVIEW_STORE_PATH = resolve(process.cwd(), 'server', 'admin-review-r
 const SERVERLESS_REVIEW_STORE_PATH = resolve('/tmp', 'passportsnap-admin-review-requests.json');
 const LOCAL_SETTINGS_STORE_PATH = resolve(process.cwd(), 'server', 'admin-site-settings.json');
 const SERVERLESS_SETTINGS_STORE_PATH = resolve('/tmp', 'passportsnap-admin-site-settings.json');
+const LOCAL_ORDER_STORE_PATH = resolve(process.cwd(), 'server', 'admin-orders.json');
+const SERVERLESS_ORDER_STORE_PATH = resolve('/tmp', 'passportsnap-admin-orders.json');
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin').trim();
 const ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD || 'admin').trim();
 const DOCUMENT_NAME_MAP = new Map(DOCUMENT_TYPES.map((document) => [document.id, document.name]));
@@ -32,6 +35,15 @@ function getSettingsStorePath() {
   }
 
   return process.env.VERCEL ? SERVERLESS_SETTINGS_STORE_PATH : LOCAL_SETTINGS_STORE_PATH;
+}
+
+function getOrderStorePath() {
+  const configuredPath = String(process.env.ADMIN_ORDER_STORE_PATH || '').trim();
+  if (configuredPath) {
+    return configuredPath;
+  }
+
+  return process.env.VERCEL ? SERVERLESS_ORDER_STORE_PATH : LOCAL_ORDER_STORE_PATH;
 }
 
 function readJsonStore(filePath, fallbackValue) {
@@ -168,7 +180,11 @@ function normalizeReviewStatus(status) {
 }
 
 function normalizeRequestType(type) {
-  return type === 'premium_retouch' ? 'premium_retouch' : 'manual_review';
+  if (type === 'premium_retouch' || type === 'compliance_check' || type === 'photo_retouching') {
+    return type;
+  }
+
+  return 'manual_review';
 }
 
 function normalizePriority(priority) {
@@ -199,6 +215,26 @@ function normalizeReviewRequestRecord(item) {
     assignee: normalizeText(item.assignee),
     note: normalizeText(item.note),
     fulfillmentNote: normalizeText(item.fulfillmentNote || item.fulfillment_note),
+    fulfilledImageUrl: normalizeText(item.fulfilledImageUrl || item.fulfilled_image_url),
+    sourceImageUrl: normalizeText(item.sourceImageUrl || item.source_image_url),
+    processedImageUrl: normalizeText(
+      item.processedImageUrl ||
+      item.processed_image_url ||
+      item.fulfilledImageUrl ||
+      item.fulfilled_image_url,
+    ),
+    deliveryEmail: normalizeText(item.deliveryEmail || item.delivery_email).toLowerCase(),
+    receiptEmail: normalizeText(item.receiptEmail || item.receipt_email).toLowerCase(),
+    customerPhone: normalizeText(item.customerPhone || item.customer_phone),
+    paymentReference: normalizeText(item.paymentReference || item.payment_reference),
+    shippingAddress: item.shippingAddress || item.shipping_address || null,
+    customerFirstName: normalizeText(item.customerFirstName || item.customer_first_name),
+    customerLastName: normalizeText(item.customerLastName || item.customer_last_name),
+    photoPackage: normalizeText(item.photoPackage || item.photo_package, 'digital'),
+    printCopies: Number(item.printCopies || item.print_copies || 2),
+    complianceCheck: parseBoolean(item.complianceCheck || item.compliance_check),
+    photoRetouching: parseBoolean(item.photoRetouching || item.photo_retouching),
+    premiumRetouch: parseBoolean(item.premiumRetouch || item.premium_retouch),
     createdAt: normalizeDate(item.createdAt || item.created_at),
     updatedAt: normalizeDate(item.updatedAt || item.updated_at),
     completedAt: normalizeDate(item.completedAt || item.completed_at),
@@ -284,6 +320,27 @@ function writeLocalSiteSettings(settings) {
   writeJsonStore(getSettingsStorePath(), settings);
 }
 
+function readLocalOrders() {
+  const candidatePaths = [getOrderStorePath()];
+
+  if (!candidatePaths.includes(LOCAL_ORDER_STORE_PATH)) {
+    candidatePaths.push(LOCAL_ORDER_STORE_PATH);
+  }
+
+  for (const filePath of candidatePaths) {
+    const parsed = readJsonStore(filePath, null);
+    if (Array.isArray(parsed)) {
+      return parsed.map(normalizeOrderRecord).sort((left, right) => sortByLatest(left.paymentVerifiedAt || left.date, right.paymentVerifiedAt || right.date));
+    }
+  }
+
+  return [];
+}
+
+async function writeLocalOrders(orders) {
+  await writeJsonStore(getOrderStorePath(), orders);
+}
+
 async function listTransactions() {
   const secretKey = getStripeSecretKey();
   const payload = await fetchJson(
@@ -314,6 +371,14 @@ async function listTransactions() {
     const customerPhone = String(
       transaction.customer_details?.phone || metadata.phone || '',
     ).trim();
+    const shippingAddress = {
+      addressLine1: String(metadata.addressLine1 || '').trim(),
+      addressLine2: String(metadata.addressLine2 || '').trim(),
+      city: String(metadata.city || '').trim(),
+      stateProvince: String(metadata.stateProvince || '').trim(),
+      postalCode: String(metadata.postalCode || '').trim(),
+      country: String(metadata.country || '').trim(),
+    };
     const reference = String(
       transaction.client_reference_id || metadata.orderReference || metadata.order_reference || transaction.id || '',
     ).trim();
@@ -337,12 +402,21 @@ async function listTransactions() {
           : `Stripe Checkout ${transaction.payment_status || transaction.status || 'updated'}`,
       customerEmail,
       customerName,
+      customerFirstName: String(metadata.firstName || metadata.first_name || '').trim(),
+      customerLastName: String(metadata.lastName || metadata.last_name || '').trim(),
       customerPhone,
+      receiptEmail: customerEmail,
+      deliveryEmail: String(metadata.deliveryEmail || metadata.delivery_email || customerEmail).trim().toLowerCase(),
       customerCode: String(transaction.customer || '').trim(),
       documentIds,
       documentLabel: resolveDocumentLabel(documentIds),
       itemCount: Number(metadata.itemCount || metadata.item_count || documentIds.length || 1),
       premiumRetouch,
+      photoPackage: String(metadata.photoPackage || metadata.photo_package || 'digital'),
+      printCopies: Number(metadata.printCopies || metadata.print_copies || 2),
+      complianceCheck: parseBoolean(metadata.complianceCheck || metadata.compliance_check),
+      photoRetouching: parseBoolean(metadata.photoRetouching || metadata.photo_retouching),
+      shippingAddress,
       rawStatus: String(transaction.payment_status || transaction.status || ''),
     };
   });
@@ -368,7 +442,7 @@ async function listOrders() {
   }
 
   const payload = await fetchSupabaseJson(
-    'orders?select=id,user_id,order_date,status,subtotal,premium_retouch,premium_fee,total,payment_currency,payment_channel,payment_gateway_response,payment_reference,payment_verified_at,service_summary,items,created_at,updated_at&order=order_date.desc',
+    'orders?select=id,user_id,order_date,status,subtotal,photo_package,print_copies,print_package_fee,compliance_check,compliance_fee,photo_retouching,photo_retouching_fee,premium_retouch,premium_fee,total,payment_currency,payment_channel,payment_gateway_response,payment_reference,payment_verified_at,service_summary,items,created_at,updated_at&order=order_date.desc',
     {},
     'Unable to load order history.',
   );
@@ -376,9 +450,79 @@ async function listOrders() {
   return Array.isArray(payload) ? payload : [];
 }
 
+async function listArchivedOrders() {
+  if (!hasSupabaseAdminAccess()) {
+    return [];
+  }
+
+  const payload = await fetchSupabaseJson(
+    'admin_order_archive?select=id,payment_reference,order_payload,created_at,updated_at&order=updated_at.desc',
+    {},
+    'Unable to load archived admin orders.',
+  );
+
+  return Array.isArray(payload)
+    ? payload.map((row) => normalizeOrderRecord(row.order_payload || {}))
+    : [];
+}
+
+async function upsertSupabaseArchivedOrder(order) {
+  const normalizedOrder = normalizeOrderRecord(order);
+  const payload = {
+    id: normalizedOrder.id || normalizedOrder.paymentReference,
+    payment_reference: normalizedOrder.paymentReference || null,
+    customer_email: normalizedOrder.customerEmail || null,
+    customer_name: normalizedOrder.customerName || null,
+    order_payload: normalizedOrder,
+  };
+
+  const rows = await fetchSupabaseJson(
+    'admin_order_archive?on_conflict=id',
+    {
+      method: 'POST',
+      headers: {
+        Prefer: 'resolution=merge-duplicates,return=representation',
+      },
+      body: JSON.stringify([payload]),
+    },
+    'Unable to archive order for admin.',
+  );
+
+  const saved = Array.isArray(rows) ? rows[0] || payload : rows || payload;
+  return normalizeOrderRecord(saved.order_payload || normalizedOrder);
+}
+
+async function loadOrders() {
+  const localOrders = readLocalOrders();
+
+  if (!hasSupabaseAdminAccess()) {
+    return localOrders;
+  }
+
+  try {
+    const [supabaseRows, archivedRows] = await Promise.all([
+      listOrders(),
+      listArchivedOrders().catch(() => []),
+    ]);
+    const normalizedSupabaseOrders = supabaseRows.map(normalizeOrderRecord);
+    const seen = new Set();
+
+    return [...archivedRows, ...normalizedSupabaseOrders, ...localOrders]
+      .filter((order) => {
+        const key = order.paymentReference || order.id;
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort((left, right) => sortByLatest(left.paymentVerifiedAt || left.date, right.paymentVerifiedAt || right.date));
+  } catch {
+    return localOrders;
+  }
+}
+
 async function listSupabaseReviewRequests() {
   const payload = await fetchSupabaseJson(
-    'admin_review_requests?select=id,target_id,user_key,user_email,customer_name,document_label,transaction_reference,request_type,status,priority,assignee,note,fulfillment_note,created_at,updated_at,completed_at&order=updated_at.desc',
+    'admin_review_requests?select=id,target_id,user_key,user_email,customer_name,document_label,transaction_reference,request_type,status,priority,assignee,note,fulfillment_note,fulfilled_image_url,created_at,updated_at,completed_at&order=updated_at.desc',
     {},
     'Unable to load review queue.',
   );
@@ -389,7 +533,7 @@ async function listSupabaseReviewRequests() {
 async function readSupabaseSiteSettings() {
   const [siteRows, documentRows] = await Promise.all([
     fetchSupabaseJson(
-      'admin_site_settings?select=id,premium_retouch_fee,watermark_text,watermark_enabled,updated_at&id=eq.default&limit=1',
+      'admin_site_settings?select=id,premium_retouch_fee,digital_print_fee,digital_print_2_copy_fee,digital_print_4_copy_fee,digital_print_6_copy_fee,compliance_check_fee,photo_retouching_fee,watermark_text,watermark_enabled,updated_at&id=eq.default&limit=1',
       {},
       'Unable to load site settings.',
     ),
@@ -405,6 +549,12 @@ async function readSupabaseSiteSettings() {
 
   return normalizeSiteSettings({
     premium_retouch_fee: siteRecord.premium_retouch_fee,
+    digital_print_fee: siteRecord.digital_print_fee,
+    digital_print_2_copy_fee: siteRecord.digital_print_2_copy_fee,
+    digital_print_4_copy_fee: siteRecord.digital_print_4_copy_fee,
+    digital_print_6_copy_fee: siteRecord.digital_print_6_copy_fee,
+    compliance_check_fee: siteRecord.compliance_check_fee,
+    photo_retouching_fee: siteRecord.photo_retouching_fee,
     watermark_text: siteRecord.watermark_text,
     watermark_enabled: siteRecord.watermark_enabled,
     updated_at: siteRecord.updated_at,
@@ -427,6 +577,7 @@ async function upsertSupabaseReviewRequest(reviewRequest) {
     assignee: reviewRequest.assignee || null,
     note: reviewRequest.note || null,
     fulfillment_note: reviewRequest.fulfillmentNote || null,
+    fulfilled_image_url: reviewRequest.fulfilledImageUrl || null,
     completed_at: reviewRequest.completedAt || null,
   };
 
@@ -458,6 +609,12 @@ async function upsertSupabaseSiteSettings(settings) {
           {
             id: 'default',
             premium_retouch_fee: settings.premiumRetouchFee,
+            digital_print_fee: settings.digitalPrintFee,
+            digital_print_2_copy_fee: settings.digitalPrint2CopyFee,
+            digital_print_4_copy_fee: settings.digitalPrint4CopyFee,
+            digital_print_6_copy_fee: settings.digitalPrint6CopyFee,
+            compliance_check_fee: settings.complianceCheckFee,
+            photo_retouching_fee: settings.photoRetouchingFee,
             watermark_text: settings.watermarkText,
             watermark_enabled: settings.watermarkEnabled,
           },
@@ -486,6 +643,49 @@ async function upsertSupabaseSiteSettings(settings) {
   ]);
 
   return readSupabaseSiteSettings();
+}
+
+async function syncFulfillmentToSupabaseOrder(reviewRequest) {
+  if (!reviewRequest?.transactionReference) {
+    return;
+  }
+
+  const orderRows = await fetchSupabaseJson(
+    `orders?select=id,items,payment_reference&or=(payment_reference.eq.${encodeURIComponent(reviewRequest.transactionReference)},id.eq.${encodeURIComponent(reviewRequest.targetId || reviewRequest.transactionReference)})&limit=1`,
+    {},
+    'Unable to load the matching order.',
+  );
+
+  const order = Array.isArray(orderRows) ? orderRows[0] : null;
+  if (!order) {
+    return;
+  }
+
+  const currentItems = Array.isArray(order.items) ? order.items : [];
+  const nextItems = currentItems.map((item) => ({
+    ...item,
+    fulfillmentStatus: reviewRequest.status,
+    fulfillmentNote: reviewRequest.fulfillmentNote || item.fulfillmentNote || '',
+    fulfilledPhoto:
+      reviewRequest.fulfilledImageUrl ||
+      item.fulfilledPhoto ||
+      '',
+  }));
+
+  await fetchSupabaseJson(
+    `orders?id=eq.${encodeURIComponent(order.id)}`,
+    {
+      method: 'PATCH',
+      headers: {
+        Prefer: 'return=representation',
+      },
+      body: JSON.stringify({
+        items: nextItems,
+        status: reviewRequest.status === 'completed' ? 'Paid - fulfilled' : 'Paid - fulfillment pending',
+      }),
+    },
+    'Unable to sync fulfillment to the order.',
+  );
 }
 
 function createUserRecord({
@@ -588,25 +788,109 @@ function ensureUserRecord(indexes, payload) {
 function normalizeOrderRecord(order) {
   const items = Array.isArray(order.items) ? order.items : [];
   const documentIds = items.map((item) => String(item?.documentId || '').trim()).filter(Boolean);
+  const primaryItem = items[0] || {};
+  const sourceImageUrl = String(primaryItem.sourcePhoto || primaryItem.originalPhoto || primaryItem.photo || '').trim();
+  const processedImageUrl = String(primaryItem.fulfilledPhoto || primaryItem.photo || '').trim();
+  const customerEmail = String(primaryItem.customerEmail || primaryItem.receiptEmail || primaryItem.deliveryEmail || '').trim().toLowerCase();
+  const deliveryEmail = String(primaryItem.deliveryEmail || primaryItem.customerEmail || '').trim().toLowerCase();
+  const customerPhone = String(primaryItem.customerPhone || '').trim();
+  const customerName = String(primaryItem.customerName || primaryItem.downloadOwnerName || '').trim();
+  const customerFirstName = String(primaryItem.customerFirstName || '').trim();
+  const customerLastName = String(primaryItem.customerLastName || '').trim();
+  const shippingAddress =
+    primaryItem.shippingAddress && typeof primaryItem.shippingAddress === 'object'
+      ? primaryItem.shippingAddress
+      : null;
 
   return {
     id: String(order.id || ''),
-    userId: String(order.user_id || ''),
-    date: normalizeDate(order.order_date || order.created_at),
+    userId: String(order.user_id || order.userId || ''),
+    date: normalizeDate(order.order_date || order.date || order.created_at || order.createdAt),
     status: String(order.status || 'paid'),
     subtotal: Number(order.subtotal || 0),
-    premiumRetouch: parseBoolean(order.premium_retouch),
-    premiumFee: Number(order.premium_fee || 0),
+    premiumRetouch: parseBoolean(order.premium_retouch ?? order.premiumRetouch),
+    photoPackage: String(order.photo_package || order.photoPackage || 'digital'),
+    printCopies: Number(order.print_copies || order.printCopies || primaryItem.printCopies || 2),
+    printPackageFee: Number(order.print_package_fee || order.printPackageFee || 0),
+    complianceCheck: parseBoolean(order.compliance_check ?? order.complianceCheck),
+    complianceCheckFee: Number(order.compliance_fee || order.complianceCheckFee || 0),
+    photoRetouching: parseBoolean(order.photo_retouching ?? order.photoRetouching),
+    photoRetouchingFee: Number(order.photo_retouching_fee || order.photoRetouchingFee || 0),
+    premiumFee: Number(order.premium_fee || order.premiumFee || 0),
     total: Number(order.total || 0),
-    paymentCurrency: String(order.payment_currency || 'USD'),
-    paymentChannel: String(order.payment_channel || 'online'),
-    paymentGatewayResponse: String(order.payment_gateway_response || 'Processed'),
-    paymentReference: String(order.payment_reference || ''),
-    paymentVerifiedAt: normalizeDate(order.payment_verified_at),
-    serviceSummary: String(order.service_summary || resolveDocumentLabel(documentIds)),
+    paymentCurrency: String(order.payment_currency || order.paymentCurrency || 'USD'),
+    paymentChannel: String(order.payment_channel || order.paymentChannel || 'online'),
+    paymentGatewayResponse: String(order.payment_gateway_response || order.paymentGatewayResponse || 'Processed'),
+    paymentReference: String(order.payment_reference || order.paymentReference || ''),
+    paymentVerifiedAt: normalizeDate(order.payment_verified_at || order.paymentVerifiedAt),
+    serviceSummary: String(order.service_summary || order.serviceSummary || resolveDocumentLabel(documentIds)),
     documentLabel: resolveDocumentLabel(documentIds),
+    customerName,
+    customerFirstName,
+    customerLastName,
+    customerEmail,
+    deliveryEmail,
+    customerPhone,
+    receiptEmail: String(primaryItem.receiptEmail || primaryItem.customerEmail || '').trim().toLowerCase(),
+    shippingAddress,
+    sourceImageUrl,
+    processedImageUrl,
+    fulfilledImageUrl: String(primaryItem.fulfilledPhoto || '').trim(),
     items,
   };
+}
+
+function buildAutomaticReviewRequests(orders, existingReviewRequests) {
+  const requestIds = new Set(existingReviewRequests.map((item) => item.id));
+  const nextItems = [];
+
+  for (const order of orders) {
+    if (!(order.complianceCheck || order.photoRetouching || order.premiumRetouch)) {
+      continue;
+    }
+
+    const requestTypes = [
+      order.complianceCheck ? 'compliance_check' : null,
+      order.photoRetouching ? 'photo_retouching' : null,
+      order.premiumRetouch ? 'premium_retouch' : null,
+    ].filter(Boolean);
+
+    for (const requestType of requestTypes) {
+      const requestId = `${requestType}:${order.paymentReference || order.id}`;
+      if (requestIds.has(requestId)) {
+        continue;
+      }
+
+      nextItems.push(
+        normalizeReviewRequestRecord({
+          id: requestId,
+          targetId: order.id,
+          userKey: order.userId || (order.customerEmail ? `email:${order.customerEmail}` : ''),
+          userEmail: order.customerEmail,
+          customerName: order.customerName || order.customerEmail || 'Customer',
+          customerPhone: order.customerPhone,
+          receiptEmail: order.customerEmail,
+          deliveryEmail: order.deliveryEmail,
+          sourceImageUrl: order.sourceImageUrl,
+          processedImageUrl: order.processedImageUrl,
+          fulfilledImageUrl: order.fulfilledImageUrl,
+          paymentReference: order.paymentReference,
+          documentLabel: order.documentLabel || order.serviceSummary || 'Passport photo',
+          transactionReference: order.paymentReference || order.id,
+          requestType,
+          status: order.fulfilledImageUrl ? 'completed' : 'requested',
+          priority: requestType === 'premium_retouch' ? 'high' : 'normal',
+          note: order.serviceSummary || '',
+          fulfillmentNote: '',
+          createdAt: order.paymentVerifiedAt || order.date || new Date().toISOString(),
+          updatedAt: order.paymentVerifiedAt || order.date || new Date().toISOString(),
+          completedAt: order.fulfilledImageUrl ? order.paymentVerifiedAt || order.date : null,
+        }),
+      );
+    }
+  }
+
+  return nextItems;
 }
 
 async function loadReviewRequests() {
@@ -679,6 +963,7 @@ export async function listAdminReviewRequests() {
 }
 
 export async function upsertAdminReviewRequest(payload) {
+  const existingItems = await loadReviewRequests().catch(() => []);
   const requestType = normalizeRequestType(payload.requestType || payload.request_type);
   const status = normalizeReviewStatus(payload.status || 'requested');
   const priority = normalizePriority(payload.priority || 'normal');
@@ -690,6 +975,7 @@ export async function upsertAdminReviewRequest(payload) {
   }
 
   const requestId = normalizeText(payload.id || `${requestType}:${targetId}`);
+  const existingItem = existingItems.find((item) => item.id === requestId);
   const nextItem = normalizeReviewRequestRecord({
     id: requestId,
     targetId,
@@ -704,6 +990,21 @@ export async function upsertAdminReviewRequest(payload) {
     assignee: payload.assignee,
     note: payload.note,
     fulfillmentNote: payload.fulfillmentNote || payload.fulfillment_note,
+    fulfilledImageUrl: payload.fulfilledImageUrl || payload.fulfilled_image_url,
+    sourceImageUrl: payload.sourceImageUrl || payload.source_image_url,
+    processedImageUrl: payload.processedImageUrl || payload.processed_image_url,
+    receiptEmail: payload.receiptEmail || payload.receipt_email,
+    deliveryEmail: payload.deliveryEmail || payload.delivery_email,
+    customerPhone: payload.customerPhone || payload.customer_phone,
+    paymentReference: payload.paymentReference || payload.payment_reference,
+    shippingAddress: payload.shippingAddress || payload.shipping_address || null,
+    customerFirstName: payload.customerFirstName || payload.customer_first_name,
+    customerLastName: payload.customerLastName || payload.customer_last_name,
+    photoPackage: payload.photoPackage || payload.photo_package,
+    printCopies: payload.printCopies || payload.print_copies,
+    complianceCheck: payload.complianceCheck || payload.compliance_check,
+    photoRetouching: payload.photoRetouching || payload.photo_retouching,
+    premiumRetouch: payload.premiumRetouch || payload.premium_retouch,
     completedAt:
       status === 'completed'
         ? normalizeDate(payload.completedAt || payload.completed_at) || now
@@ -712,14 +1013,39 @@ export async function upsertAdminReviewRequest(payload) {
 
   if (hasSupabaseAdminAccess()) {
     try {
-      return await upsertSupabaseReviewRequest(nextItem);
+      const saved = await upsertSupabaseReviewRequest(nextItem);
+      if (saved.status === 'completed') {
+        await syncFulfillmentToSupabaseOrder(saved);
+        if (
+          saved.fulfilledImageUrl &&
+          (existingItem?.status !== 'completed' || existingItem?.fulfilledImageUrl !== saved.fulfilledImageUrl)
+        ) {
+          await sendOrderDeliveryEmail({
+            orderId: saved.targetId || saved.transactionReference,
+            paymentReference: saved.transactionReference,
+            customerName: saved.customerName,
+            customerEmail: saved.userEmail,
+            receiptEmail: saved.receiptEmail,
+            deliveryEmail: saved.deliveryEmail,
+            fulfillmentNote: saved.fulfillmentNote,
+            items: [
+              {
+                documentName: saved.documentLabel,
+                photo: saved.processedImageUrl || '',
+                fulfilledPhoto: saved.fulfilledImageUrl,
+                manualFulfillmentRequired: false,
+              },
+            ],
+          }).catch(() => null);
+        }
+      }
+      return saved;
     } catch {
       // Fall through to the local file store for local verification.
     }
   }
 
   const currentItems = readLocalReviewRequests();
-  const existingItem = currentItems.find((item) => item.id === requestId);
   const localItem = {
     ...existingItem,
     ...nextItem,
@@ -730,6 +1056,31 @@ export async function upsertAdminReviewRequest(payload) {
 
   const nextItems = [localItem, ...currentItems.filter((item) => item.id !== requestId)];
   await writeLocalReviewRequests(nextItems);
+
+  if (
+    localItem.status === 'completed' &&
+    localItem.fulfilledImageUrl &&
+    (existingItem?.status !== 'completed' || existingItem?.fulfilledImageUrl !== localItem.fulfilledImageUrl)
+  ) {
+    await sendOrderDeliveryEmail({
+      orderId: localItem.targetId || localItem.transactionReference,
+      paymentReference: localItem.transactionReference,
+      customerName: localItem.customerName,
+      customerEmail: localItem.userEmail,
+      receiptEmail: localItem.receiptEmail,
+      deliveryEmail: localItem.deliveryEmail,
+      fulfillmentNote: localItem.fulfillmentNote,
+      items: [
+        {
+          documentName: localItem.documentLabel,
+          photo: localItem.processedImageUrl || '',
+          fulfilledPhoto: localItem.fulfilledImageUrl,
+          manualFulfillmentRequired: false,
+        },
+      ],
+    }).catch(() => null);
+  }
+
   return localItem;
 }
 
@@ -760,12 +1111,38 @@ export async function getPublicSiteSettings() {
   return loadSiteSettings();
 }
 
+export async function upsertAdminOrderRecord(payload) {
+  const normalizedOrder = normalizeOrderRecord(payload);
+
+  if (!normalizedOrder.id && !normalizedOrder.paymentReference) {
+    throw new Error('An order id or payment reference is required.');
+  }
+
+  if (hasSupabaseAdminAccess()) {
+    try {
+      return await upsertSupabaseArchivedOrder(normalizedOrder);
+    } catch {
+      // Fall back to the local archive for development or partial configuration.
+    }
+  }
+
+  const currentOrders = readLocalOrders();
+  const key = normalizedOrder.paymentReference || normalizedOrder.id;
+  const nextOrders = [
+    normalizedOrder,
+    ...currentOrders.filter((order) => (order.paymentReference || order.id) !== key),
+  ];
+
+  await writeLocalOrders(nextOrders);
+  return normalizedOrder;
+}
+
 export async function getAdminOverview() {
-  const [reviewRequests, transactions, profiles, orders, settings] = await Promise.all([
+  const [storedReviewRequests, transactions, profiles, orders, settings] = await Promise.all([
     loadReviewRequests(),
     listTransactions(),
     listProfiles().catch(() => []),
-    listOrders().catch(() => []),
+    loadOrders().catch(() => []),
     loadSiteSettings(),
   ]);
 
@@ -789,11 +1166,51 @@ export async function getAdminOverview() {
   }
 
   const normalizedOrders = orders.map(normalizeOrderRecord);
+  const rawReviewRequests = [
+    ...storedReviewRequests,
+    ...buildAutomaticReviewRequests(normalizedOrders, storedReviewRequests),
+  ];
+  const orderByReference = new Map(
+    normalizedOrders.flatMap((order) => [
+      [order.paymentReference, order],
+      [order.id, order],
+    ]).filter(([key]) => key),
+  );
+  const reviewRequests = rawReviewRequests
+    .map((request) => {
+      const linkedOrder =
+        orderByReference.get(request.transactionReference) ||
+        orderByReference.get(request.targetId) ||
+        null;
+
+      if (!linkedOrder) {
+        return request;
+      }
+
+      return normalizeReviewRequestRecord({
+        ...linkedOrder,
+        ...request,
+        customerName: request.customerName || linkedOrder.customerName,
+        userEmail: request.userEmail || linkedOrder.customerEmail,
+        customerPhone: request.customerPhone || linkedOrder.customerPhone,
+        receiptEmail: request.receiptEmail || linkedOrder.customerEmail,
+        deliveryEmail: request.deliveryEmail || linkedOrder.deliveryEmail,
+        sourceImageUrl: request.sourceImageUrl || linkedOrder.sourceImageUrl,
+        processedImageUrl: request.processedImageUrl || linkedOrder.processedImageUrl,
+        fulfilledImageUrl: request.fulfilledImageUrl || linkedOrder.fulfilledImageUrl,
+        paymentReference: request.paymentReference || linkedOrder.paymentReference,
+      });
+    })
+    .sort((left, right) => sortByLatest(left.updatedAt, right.updatedAt));
 
   for (const order of normalizedOrders) {
     const userRecord = ensureUserRecord(indexes, {
-      key: order.userId || undefined,
+      key: order.userId || (order.customerEmail ? `email:${order.customerEmail}` : undefined),
       id: order.userId || undefined,
+      email: order.customerEmail,
+      name: order.customerName,
+      phone: order.customerPhone,
+      createdAt: order.date,
       source: profiles.length ? 'profile' : 'transaction',
     });
 

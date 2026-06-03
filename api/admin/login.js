@@ -32,6 +32,10 @@ function recordAttempt(ip) {
   }
 }
 
+function clearAttempts(ip) {
+  loginAttempts.delete(ip);
+}
+
 export default async function handler(request, response) {
   setApiHeaders(response, request, 'POST,OPTIONS');
 
@@ -58,6 +62,7 @@ export default async function handler(request, response) {
         : request.body || {};
 
     const result = authenticateAdmin(payload.email, payload.password);
+    clearAttempts(ip);
     response.status(200).json(result);
   } catch (error) {
     recordAttempt(ip);

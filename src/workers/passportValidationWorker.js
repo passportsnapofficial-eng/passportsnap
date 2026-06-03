@@ -599,6 +599,20 @@ function chooseBackgroundReference(primaryStats, fallbackStats, minimumCount) {
   return fallbackStats;
 }
 
+function evaluateHeadShadow(shadowSummary, backgroundStats) {
+  if (shadowSummary.count >= 40) {
+    return shadowSummary.meanLuminance >= 92 && shadowSummary.darkRatio <= 0.58;
+  }
+
+  return (
+    backgroundStats.count > 0 &&
+    backgroundStats.meanLuminance >= 148 &&
+    backgroundStats.darkRatio <= 0.18 &&
+    backgroundStats.luminanceStdDev <= 48 &&
+    backgroundStats.edgeDensity <= 0.34
+  );
+}
+
 function buildLightingAnalysis(imageData, width, height, primaryFace) {
   if (!primaryFace) {
     return {
@@ -822,6 +836,7 @@ function buildBackgroundAnalysis(imageData, width, height, foregroundMask, prima
       largestComponent.boundingBox.height >= height * 0.62,
   );
   const backgroundTone = classifyBackgroundTone(preferredBackgroundStats);
+  const noShadowBehindHead = evaluateHeadShadow(shadowSummary, preferredBackgroundStats);
 
   return {
     supported: true,
@@ -835,10 +850,7 @@ function buildBackgroundAnalysis(imageData, width, height, foregroundMask, prima
     lightBackground:
       preferredBackgroundStats.meanLuminance >= 136 &&
       preferredBackgroundStats.darkRatio <= 0.22,
-    noShadowBehindHead:
-      shadowSummary.count >= 40 &&
-      shadowSummary.meanLuminance >= 96 &&
-      shadowSummary.darkRatio <= 0.5,
+    noShadowBehindHead,
     noBackgroundDistractions: secondaryForegroundRatio <= 0.035,
     meanLuminance: preferredBackgroundStats.meanLuminance,
     meanRed: preferredBackgroundStats.meanRed,
@@ -855,6 +867,8 @@ function buildBackgroundAnalysis(imageData, width, height, foregroundMask, prima
     warmBias: backgroundTone.warmBias,
     backgroundSampleSource:
       preferredBackgroundStats === borderBackgroundStats ? 'border' : 'segmentation',
+    shadowSampleCount: shadowSummary.count,
+    shadowMeanLuminance: shadowSummary.meanLuminance,
     shadowDarkRatio: shadowSummary.darkRatio,
     secondaryForegroundRatio,
     shouldersVisible,
@@ -1078,11 +1092,14 @@ function buildHeuristicEyewearAnalysis(imageData, grayscale, width, height, prim
     Math.max(leftEye.edgeDensity, rightEye.edgeDensity) >= 0.09 &&
     eyeBand.edgeDensity >= 0.09;
   const likelyBridge =
-    bridge.dynamicDarkRatio >= 0.17 ||
+    bridge.dynamicDarkRatio >= 0.13 ||
     (bridge.edgeDensity >= 0.12 && bridge.contrast >= 34);
   const likelyTemples =
-    templeDarkRatio >= 0.18 ||
+    templeDarkRatio >= 0.15 ||
     (templeEdgeDensity >= 0.16 && eyeBand.dynamicDarkRatio >= 0.14);
+  const likelyDarkFrames =
+    eyeBand.dynamicDarkRatio >= 0.17 &&
+    (bridge.dynamicDarkRatio >= 0.13 || templeDarkRatio >= 0.14);
   const likelyGlare =
     glareRatio >= 0.06 &&
     eyeBand.edgeDensity >= 0.08 &&
@@ -1117,8 +1134,9 @@ function buildHeuristicEyewearAnalysis(imageData, grayscale, width, height, prim
     (likelyThinFrames && likelyBridge) ||
     (likelyTempleArms && likelyBridge) ||
     likelyTintedLenses ||
+    likelyDarkFrames ||
     (eyeContrast >= 60 && likelyGlare && bridge.edgeDensity >= 0.06) ||
-    eyewearScore >= 0.88;
+    eyewearScore >= 0.84;
 
   return {
     supported: true,
@@ -1172,13 +1190,13 @@ async function buildEyewearAnalysis(analysisCanvas, imageData, grayscale, width,
   const mlNoEyewearScore = Number(learned.noGlassesScore || 0);
   const classifierMargin = Number(learned.scoreMargin || 0);
   const corroboratedHeuristic =
-    heuristic.eyewearScore >= 0.68 &&
+    heuristic.eyewearScore >= 0.62 &&
     (
-      heuristic.bridgeDarkRatio >= 0.15 ||
-      heuristic.templeDarkRatio >= 0.18 ||
+      heuristic.bridgeDarkRatio >= 0.13 ||
+      heuristic.templeDarkRatio >= 0.15 ||
       heuristic.glareRatio >= 0.05
     );
-  const heuristicPositive = heuristic.wearingGlasses || heuristic.eyewearScore >= 0.82;
+  const heuristicPositive = heuristic.wearingGlasses || heuristic.eyewearScore >= 0.72;
   const strongModelPositive = mlEyewearScore >= 0.9 && classifierMargin >= 0.22;
   const moderateModelPositive = mlEyewearScore >= 0.78 && classifierMargin >= 0.16;
   const strongModelNegative = mlNoEyewearScore >= 0.72 && classifierMargin <= -0.06;
@@ -1186,8 +1204,8 @@ async function buildEyewearAnalysis(analysisCanvas, imageData, grayscale, width,
     ? false
     : (strongModelPositive && corroboratedHeuristic) ||
       (moderateModelPositive && heuristicPositive) ||
-      heuristic.eyewearScore >= 0.92 ||
-      (mlEyewearScore >= 0.84 && heuristic.glareRatio >= 0.08 && heuristic.bridgeDarkRatio >= 0.18);
+      heuristic.eyewearScore >= 0.84 ||
+      (mlEyewearScore >= 0.84 && heuristic.glareRatio >= 0.08 && heuristic.bridgeDarkRatio >= 0.15);
 
   return {
     ...heuristic,
@@ -1563,6 +1581,7 @@ export async function validatePassportPhotoPayload(payload, options = {}) {
       lighting,
       sharpness,
       backgroundRemoval: {
+        attempted: Boolean(backgroundRemoval?.attempted),
         applied: Boolean(backgroundRemoval?.applied),
         model: backgroundRemoval?.model || null,
         maskQuality: Number(backgroundRemoval?.maskQuality || 0),
@@ -1570,6 +1589,8 @@ export async function validatePassportPhotoPayload(payload, options = {}) {
         foregroundRatio: Number(backgroundRemoval?.foregroundRatio || 0),
         featherRatio: Number(backgroundRemoval?.featherRatio || 0),
         usedForExport: Boolean(backgroundRemoval?.applied),
+        fallbackUsed: Boolean(backgroundRemoval?.fallbackUsed),
+        policyRestricted: Boolean(backgroundRemoval?.policyRestricted),
       },
       framing: {
         faceDetected: projectedFaceDetection.facesCount >= 1,

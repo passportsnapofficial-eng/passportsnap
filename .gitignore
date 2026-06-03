@@ -24,3 +24,32 @@ dist-ssr
 *.sw?
 passport-app/
 .vercel
+
+# --- Secrets / env files (NEVER commit real env files) ---
+.env
+.env.*
+!.env.example
+.vercel.production.env
+vercel-env-production.txt
+*.production.env
+
+# --- Local debug output ---
+*.err
+*.out
+
+# --- Browser debug profile / cache (do not track) ---
+.edge-cdp/
+
+# --- Server-side runtime data stores (contain customer data) ---
+server/admin-orders.json
+server/admin-review-requests.json
+
+# --- Test outputs & local artifacts ---
+.codex-logs/
+results/
+Test/
+.tmp/
+playwright-*.png
+*-check.png
+payment-waiting-screen.png
+build-run-*.png

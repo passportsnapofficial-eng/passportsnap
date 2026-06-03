@@ -10,6 +10,7 @@ export const VIEWS = {
   success: 'success',
   dashboard: 'dashboard',
   admin: 'admin',
+  about: 'about',
   privacy: 'privacy',
   terms: 'terms',
 };
@@ -26,6 +27,7 @@ export const VIEW_PATHS = {
   [VIEWS.success]: '/success',
   [VIEWS.dashboard]: '/dashboard',
   [VIEWS.admin]: '/admin',
+  [VIEWS.about]: '/about',
   [VIEWS.privacy]: '/privacy',
   [VIEWS.terms]: '/terms',
 };
@@ -77,7 +79,7 @@ export const FLOW_STEPS = [
   { view: VIEWS.document, label: 'Document', shortLabel: 'Document' },
   { view: VIEWS.capture, label: 'Take Photo', shortLabel: 'Photo' },
   { view: VIEWS.processing, label: 'Getting Ready', shortLabel: 'Ready' },
-  { view: VIEWS.review, label: 'Download', shortLabel: 'Download' },
+  { view: VIEWS.review, label: 'Review', shortLabel: 'Review' },
 ];
 
 export const PROCESSING_STEPS = [
@@ -95,8 +97,8 @@ export const PROCESSING_STEPS = [
   },
   {
     key: 'segment-background',
-    title: 'Separating you from the background',
-    description: 'Making room for a clean finish.',
+    title: 'Analyzing the background',
+    description: 'Checking the backdrop before export.',
     durationMs: 220,
   },
   {
@@ -134,6 +136,12 @@ export const PROCESSING_STEPS = [
     title: 'Final check',
     description: 'Giving it one last look.',
     durationMs: 180,
+  },
+  {
+    key: 'enhance-photo',
+    title: 'Enhancing the final photo',
+    description: 'Polishing the finished preview.',
+    durationMs: 260,
   },
   {
     key: 'finalize-result',

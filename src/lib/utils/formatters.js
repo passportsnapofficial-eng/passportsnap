@@ -34,3 +34,7 @@ export function formatDownloadFilename(item, ownerName = '') {
   const sizeSlug = slugify(item?.sizeLabel || '2x2');
   return `${ownerSlug}-${countrySlug}-${sizeSlug}.jpg`;
 }
+
+export function joinWithMiddleDot(values = []) {
+  return values.filter(Boolean).join(' · ');
+}

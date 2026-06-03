@@ -1,4 +1,4 @@
-const PAYMENT_REQUEST_TIMEOUT_MS = 20000;
+const PAYMENT_REQUEST_TIMEOUT_MS = 30000;
 
 async function parseJsonResponse(response) {
   let payload = null;
@@ -10,7 +10,10 @@ async function parseJsonResponse(response) {
   }
 
   if (!response.ok) {
-    throw new Error(payload?.message || 'The payment request could not be completed.');
+    const error = new Error(payload?.message || 'The payment request could not be completed.');
+    error.statusCode = response.status;
+    error.payload = payload;
+    throw error;
   }
 
   return payload;

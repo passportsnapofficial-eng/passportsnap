@@ -1,48 +1,55 @@
 export const HERO_BADGES = [
-  'Sizing handled for you',
-  'Background fixed automatically',
-  'Compliance checked in one pass',
-  'Download-ready in seconds',
+  'Official sizing',
+  'DoS-guided checks',
+  'Instant Download',
+  'Privacy First',
 ];
 
 export const TRUST_STRIP_POINTS = [
-  '4.9/5 average customer rating',
-  'Selfie-friendly on phone or desktop',
-  'Built to feel like a premium done-for-you service',
+  '4.9/5 rating from happy users',
+  'Accepted in 150+ countries',
+  'Money-back guarantee if not accepted',
 ];
 
 export const FEATURE_CARDS = [
-  {
-    title: 'Done in minutes',
-    body: 'Take your photo at home, no studio, no waiting.',
-  },
-  {
-    title: 'Smart processing',
-    body: 'Auto crop, align, and adjust your photo instantly.',
-  },
-  {
-    title: 'Compliance ready',
-    body: 'Formatted to meet passport standards from the start.',
-  },
+  { title: 'Done in minutes', body: 'Take your photo at home, no studio, no waiting.' },
+  { title: 'Smart formatting', body: 'Crop, align, and size your photo without changing your appearance.' },
+  { title: 'Compliance ready', body: 'Formatted to meet passport standards from the start.' },
 ];
 
 export const HOW_IT_WORKS_STEPS = [
   {
-    title: 'Choose your document',
-    description: 'Pick the passport or visa format you need.',
+    title: 'Choose document',
+    description: 'Pick the passport or visa format you need from 150+ supported documents.',
   },
   {
-    title: 'Take a selfie or upload',
-    description: 'Use your camera or add a portrait from your phone.',
+    title: 'Take a selfie',
+    description: 'Use your phone camera or upload an existing portrait photo.',
   },
   {
-    title: 'Automatic processing',
-    description: 'We handle sizing, cropping, background, and checks.',
+    title: 'Format and check',
+    description: 'We size, crop, and check the photo against official rules without changing your appearance.',
   },
   {
     title: 'Download',
-    description: 'Your finished photo is ready to save right away.',
+    description: 'Your finished passport photo is ready to save, submit online, or print.',
   },
+];
+
+export const SELFIE_TIPS = [
+  'Good lighting on your face',
+  'Face centered in frame',
+  'Look straight ahead',
+  'Plain background preferred',
+];
+
+export const COMPARISON_ROWS = [
+  { feature: 'Selfie friendly', passportSnap: true, studio: false, other: false },
+  { feature: 'Guided crop and sizing', passportSnap: true, studio: false, other: true },
+  { feature: 'Instant download', passportSnap: true, studio: false, other: true },
+  { feature: 'Compliance guarantee', passportSnap: true, studio: false, other: false },
+  { feature: 'Privacy protection', passportSnap: true, studio: true, other: false },
+  { feature: 'Affordable pricing', passportSnap: true, studio: false, other: true },
 ];
 
 export const CONSISTENCY_PROMISE_POINTS = [
@@ -55,10 +62,18 @@ export const CONSISTENCY_PROMISE_POINTS = [
 
 export const FOOTER_LINKS = {
   services: [
-    { id: 'documents', label: 'Supported Documents' },
-  ],
-  product: [
     { id: 'how-it-works', label: 'How It Works' },
-    { id: 'consistency', label: 'One Simple Flow' },
+    { id: 'documents', label: 'Supported Documents' },
+    { id: 'comparison', label: 'Why PassportSnap' },
+  ],
+  support: [
+    { id: 'selfie-guide', label: 'Selfie Guide' },
+    { id: 'how-it-works', label: 'FAQs' },
+  ],
+  company: [
+    { id: 'about', label: 'About PassportSnap' },
+    { id: 'privacy', label: 'Privacy Policy' },
+    { id: 'terms', label: 'Terms of Use' },
+    { id: 'dashboard', label: 'My Account' },
   ],
 };

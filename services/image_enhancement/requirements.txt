@@ -1,0 +1,7 @@
+# Install a matching PyTorch build first: https://pytorch.org/get-started/locally/
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+numpy<3
+opencv-python-headless==4.10.0.84
+basicsr>=1.4.2
+realesrgan>=0.3.0

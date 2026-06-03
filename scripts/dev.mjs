@@ -7,6 +7,7 @@ const rootDir = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const viteBin = resolve(rootDir, 'node_modules', 'vite', 'bin', 'vite.js');
 const apiServerEntry = resolve(rootDir, 'server', 'appServer.mjs');
 const shouldRunLegacyAiService = process.argv.includes('--with-legacy-ai');
+const shouldRunImageEnhancer = process.argv.includes('--with-image-enhancer');
 const apiWatchTargets = [
   resolve(rootDir, 'server'),
   resolve(rootDir, 'src', 'lib', 'admin'),
@@ -30,6 +31,7 @@ let isShuttingDown = false;
 let apiRestartTimer = null;
 let apiServer = null;
 let aiService = null;
+let imageEnhancerService = null;
 
 function spawnChild(args) {
   return spawn(process.execPath, args, {
@@ -47,6 +49,22 @@ function stopChild(child) {
 
 function startAiService() {
   const child = spawn('python', ['-m', 'uvicorn', 'services.legacy.background_removal.main:app', '--host', '127.0.0.1', '--port', '8787'], {
+    cwd: rootDir,
+    stdio: 'inherit',
+    env: process.env,
+  });
+
+  child.on('exit', (code, signal) => {
+    if (isShuttingDown) return;
+    if (signal || code === 0) return;
+    shutdown(code || 1);
+  });
+
+  return child;
+}
+
+function startImageEnhancerService() {
+  const child = spawn('python', ['-m', 'uvicorn', 'services.image_enhancement.main:app', '--host', '127.0.0.1', '--port', '8788'], {
     cwd: rootDir,
     stdio: 'inherit',
     env: process.env,
@@ -93,6 +111,9 @@ apiServer = startApiServer();
 if (shouldRunLegacyAiService) {
   aiService = startAiService();
 }
+if (shouldRunImageEnhancer) {
+  imageEnhancerService = startImageEnhancerService();
+}
 
 const watchers = apiWatchTargets.map((targetPath) =>
   watch(targetPath, { recursive: true }, (_eventType, filename) => {
@@ -112,6 +133,7 @@ function shutdown(exitCode = 0) {
 
   stopChild(apiServer);
   stopChild(aiService);
+  stopChild(imageEnhancerService);
   stopChild(viteServer);
   process.exit(exitCode);
 }

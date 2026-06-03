@@ -9,12 +9,18 @@ import {
   getPublicSiteSettings,
   isValidAdminToken,
   saveAdminSiteSettings,
+  upsertAdminOrderRecord,
   upsertAdminReviewRequest,
 } from '../src/lib/admin/adminServerCore.js';
 import {
   proxyBackgroundRemovalRequest,
   readRawRequestBody,
 } from '../src/lib/backgroundRemoval/backgroundRemovalServerCore.js';
+import {
+  proxyImageEnhancementRequest,
+  readRawRequestBody as readEnhancementRequestBody,
+} from '../src/lib/processing/imageEnhancementServerCore.js';
+import { sendOrderDeliveryEmail } from '../src/lib/email/orderDeliveryCore.js';
 import { initializeTransaction, verifyTransaction } from '../src/lib/payments/stripeServerCore.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
@@ -231,13 +237,13 @@ function serveStaticAsset(requestPath, response) {
   response.end(readFileSync(safePath));
 }
 
-function parseRequestBody(request) {
+function parseRequestBody(request, maxBodyLength = 1_000_000) {
   return new Promise((resolvePromise, rejectPromise) => {
     let body = '';
 
     request.on('data', (chunk) => {
       body += chunk;
-      if (body.length > 1_000_000) {
+      if (body.length > maxBodyLength) {
         rejectPromise(new Error('Request body too large.'));
       }
     });
@@ -349,6 +355,20 @@ const server = createServer(async (request, response) => {
       return;
     }
 
+    if (request.method === 'POST' && requestUrl.pathname === '/api/orders/delivery') {
+      const payload = await parseRequestBody(request);
+      const result = await sendOrderDeliveryEmail(payload);
+      sendJson(response, 200, result, requestOrigin);
+      return;
+    }
+
+    if (request.method === 'POST' && requestUrl.pathname === '/api/orders/record') {
+      const payload = await parseRequestBody(request, 25_000_000);
+      const result = await upsertAdminOrderRecord(payload);
+      sendJson(response, 200, result, requestOrigin);
+      return;
+    }
+
     if (request.method === 'POST' && requestUrl.pathname === '/api/remove-bg') {
       const bodyBuffer = await readRawRequestBody(request);
       const result = await proxyBackgroundRemovalRequest({
@@ -364,6 +384,24 @@ const server = createServer(async (request, response) => {
         'X-Background-Transparent-Ratio': result.transparentRatio,
         'X-Background-Foreground-Ratio': result.foregroundRatio,
         'X-Background-Feather-Ratio': result.featherRatio,
+      }, requestOrigin);
+      response.end(result.bodyBuffer);
+      return;
+    }
+
+    if (request.method === 'POST' && requestUrl.pathname === '/api/enhance-photo') {
+      const bodyBuffer = await readEnhancementRequestBody(request);
+      const result = await proxyImageEnhancementRequest({
+        bodyBuffer,
+        contentType: request.headers['content-type'] || 'application/octet-stream',
+      });
+
+      setBaseHeaders(response, result.statusCode, result.contentType, {
+        'Content-Length': String(result.contentLength),
+        'X-Enhancement-Model': result.enhancementModel,
+        'X-Enhancement-Scale': result.enhancementScale,
+        'X-Enhancement-Target-Width': result.enhancementTargetWidth,
+        'X-Enhancement-Target-Height': result.enhancementTargetHeight,
       }, requestOrigin);
       response.end(result.bodyBuffer);
       return;

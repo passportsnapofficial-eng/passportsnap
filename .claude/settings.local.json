@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(npm run *)",
+      "Bash(node server/appServer.mjs)",
+      "Bash(echo \"Server PID: $!\")",
+      "Bash(curl -s -o results/test-bg-1.jpg -w \"Status:%{http_code} Size:%{size_download} Type:%{content_type}\" -X POST http://127.0.0.1:8790/api/remove-bg -F \"file=@public/test-fixtures/external/pexels-headshot-man-1.jpeg;type=image/jpeg\")",
+      "Bash(curl -s -X POST http://127.0.0.1:8790/api/remove-bg -F \"file=@public/test-fixtures/external/pexels-headshot-man-1.jpeg;type=image/jpeg\")",
+      "Bash(taskkill /F /IM node.exe)",
+      "Bash(netstat -ano)",
+      "Bash(findstr \":879\")",
+      "Bash(curl -s -X POST \"https://api.remove.bg/v1.0/removebg\" -H \"X-Api-Key: usGuf35oSUVEDRkBLb9LggVM\" -F \"image_url=https://www.remove.bg/img/remove-bg-before.jpg\" -F \"size=preview\" -F \"type=person\" -F \"format=png\")",
+      "Bash(curl -s -w \"\\\\nHTTP:%{http_code} Bytes:%{size_download}\" -o results/direct-test.png -X POST \"https://api.remove.bg/v1.0/removebg\" -H \"X-Api-Key: usGuf35oSUVEDRkBLb9LggVM\" -F \"image_file=@public/test-fixtures/external/pexels-headshot-man-1.jpeg\" -F \"size=auto\" -F \"type=person\" -F \"format=png\")",
+      "Bash(node -e ' *)",
+      "Bash(taskkill /F /PID 12660)",
+      "Bash(PAYMENTS_SERVER_PORT=8790 REMOVE_BG_API_KEY=usGuf35oSUVEDRkBLb9LggVM node server/appServer.mjs)",
+      "Bash(curl -s -o results/test-man1.png -w \"HTTP:%{http_code} Bytes:%{size_download} Type:%{content_type}\\\\n\" -X POST http://127.0.0.1:8792/api/remove-bg -F \"file=@public/test-fixtures/external/pexels-headshot-man-1.jpeg;type=image/jpeg\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(git config *)",
+      "Bash(git fetch *)",
+      "Bash(vercel --version)",
+      "Bash(gh auth *)",
+      "Bash(curl -s http://localhost:5175)",
+      "Bash(curl -I http://localhost:5173/home-preview/before.webp)",
+      "Bash(curl -I http://localhost:5173/home-preview/after.jpg)",
+      "Bash(git stash *)"
+    ]
+  }
+}

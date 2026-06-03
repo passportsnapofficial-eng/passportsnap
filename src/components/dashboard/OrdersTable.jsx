@@ -1,4 +1,5 @@
 import { Download } from 'lucide-react';
+import { getPhotoPackageLabel } from '../../lib/checkout/pricing';
 import { formatCurrency, formatDate } from '../../lib/utils/formatters';
 import { FlagMark } from '../shared/FlagMark';
 
@@ -37,7 +38,7 @@ export function OrdersTable({ orders, onDownload }) {
             <tr>
               <th className="px-6 py-4 font-semibold">Order</th>
               <th className="px-6 py-4 font-semibold">Date</th>
-              <th className="px-6 py-4 font-semibold">Premium</th>
+              <th className="px-6 py-4 font-semibold">Services</th>
               <th className="px-6 py-4 font-semibold">Total</th>
               <th className="px-6 py-4 font-semibold">Status</th>
               <th className="px-6 py-4 font-semibold text-right">Action</th>
@@ -59,7 +60,12 @@ export function OrdersTable({ orders, onDownload }) {
                 </td>
                 <td className="px-6 py-5 text-sm text-slate-600">{formatDate(order.date)}</td>
                 <td className="px-6 py-5 text-sm text-slate-600">
-                  {order.premiumRetouch ? 'Selected' : 'Not selected'}
+                  {[
+                    getPhotoPackageLabel(order.photoPackage, order.printCopies),
+                    order.complianceCheck ? 'Compliance' : null,
+                    order.photoRetouching ? 'Retouching' : null,
+                    order.premiumRetouch ? 'Cleanup' : null,
+                  ].filter(Boolean).join(' · ')}
                 </td>
                 <td className="px-6 py-5 text-sm font-semibold text-slate-900">
                   {formatCurrency(order.total)}
@@ -105,9 +111,14 @@ export function OrdersTable({ orders, onDownload }) {
                 <div className="mt-2 text-sm font-semibold text-slate-900">{formatDate(order.date)}</div>
               </div>
               <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Premium</div>
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Services</div>
                 <div className="mt-2 text-sm font-semibold text-slate-900">
-                  {order.premiumRetouch ? 'Selected' : 'Not selected'}
+                  {[
+                    getPhotoPackageLabel(order.photoPackage, order.printCopies),
+                    order.complianceCheck ? 'Compliance' : null,
+                    order.photoRetouching ? 'Retouching' : null,
+                    order.premiumRetouch ? 'Cleanup' : null,
+                  ].filter(Boolean).join(' · ')}
                 </div>
               </div>
               <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">

@@ -6,6 +6,11 @@ import {
 import { getSizePresetById } from '../data/sizePresets';
 import { processPassportPhoto } from '../lib/processing/mockPassportProcessor';
 import { buildReviewedSourcePhoto } from '../lib/processing/reviewTransform';
+import { waitForNextPaint } from '../lib/processing/browserYield';
+import {
+  DEFAULT_REVIEW_ADJUSTMENTS,
+  normalizeReviewAdjustments,
+} from '../lib/processing/reviewTransform';
 import {
   CAPTURE_MODES,
   PROCESSING_STEPS,
@@ -29,6 +34,10 @@ function createProcessingState(overrides = {}) {
 
 function createIdleProcessingState() {
   return createProcessingState();
+}
+
+function getProcessingStep(stepKey) {
+  return PROCESSING_STEPS.find((step) => step.key === stepKey) || null;
 }
 
 function getStepProgress(stepIndex) {
@@ -58,6 +67,7 @@ export function usePassportFlow(documentCatalog = DOCUMENT_TYPES) {
   const [preferredCaptureMode, setPreferredCaptureMode] = useState(CAPTURE_MODES.camera);
   const [captureMode, setCaptureMode] = useState(CAPTURE_MODES.camera);
   const [draftPhoto, setDraftPhoto] = useState(null);
+  const [draftPhotoAdjustments, setDraftPhotoAdjustments] = useState(DEFAULT_REVIEW_ADJUSTMENTS);
   const [sourcePhoto, setSourcePhoto] = useState(null);
   const [result, setResult] = useState(null);
   const [processingState, setProcessingState] = useState(createIdleProcessingState);
@@ -152,6 +162,7 @@ export function usePassportFlow(documentCatalog = DOCUMENT_TYPES) {
   const resetSession = () => {
     runIdRef.current += 1;
     setDraftPhoto(null);
+    setDraftPhotoAdjustments(DEFAULT_REVIEW_ADJUSTMENTS);
     setSourcePhoto(null);
     setResult(null);
     setProcessingState(createIdleProcessingState());
@@ -173,6 +184,7 @@ export function usePassportFlow(documentCatalog = DOCUMENT_TYPES) {
     setPreferredCaptureMode(mode);
     setCaptureMode(mode);
     setDraftPhoto(null);
+    setDraftPhotoAdjustments(DEFAULT_REVIEW_ADJUSTMENTS);
     setSourcePhoto(null);
     setResult(null);
     setProcessingState(createIdleProcessingState());
@@ -186,10 +198,15 @@ export function usePassportFlow(documentCatalog = DOCUMENT_TYPES) {
 
   const setDraftSourcePhoto = (photoDataUrl) => {
     setDraftPhoto(photoDataUrl || null);
+    setDraftPhotoAdjustments(DEFAULT_REVIEW_ADJUSTMENTS);
     if (!photoDataUrl) {
       setSourcePhoto(null);
       setResult(null);
     }
+  };
+
+  const updateDraftPhotoAdjustments = (adjustments) => {
+    setDraftPhotoAdjustments(normalizeReviewAdjustments(adjustments));
   };
 
   const clearProcessingState = () => {
@@ -211,19 +228,30 @@ export function usePassportFlow(documentCatalog = DOCUMENT_TYPES) {
     }
 
     try {
-      const reviewedPhoto = await buildReviewedSourcePhoto(draftPhoto, preset);
       runId = ++runIdRef.current;
-      setSourcePhoto(reviewedPhoto);
+      const initialStep = PROCESSING_STEPS[0] || null;
+      setSourcePhoto(draftPhoto);
       setResult(null);
       setProcessingState(createProcessingState({
         status: 'running',
-        activeStepKey: PROCESSING_STEPS[0].key,
+        activeStepKey: initialStep?.key || null,
         completedKeys: [],
         progress: 4,
+        message: initialStep?.description || '',
       }));
       navigate(VIEWS.processing);
+      await waitForNextPaint();
 
-      const handleStageChange = (stepKey) => {
+      const reviewedPhoto = await buildReviewedSourcePhoto(draftPhoto, preset, draftPhotoAdjustments);
+
+      if (runId !== runIdRef.current) {
+        return;
+      }
+
+      setSourcePhoto(reviewedPhoto);
+      await waitForNextPaint();
+
+      const handleStageChange = async (stepKey) => {
         if (runId !== runIdRef.current) {
           return;
         }
@@ -234,12 +262,15 @@ export function usePassportFlow(documentCatalog = DOCUMENT_TYPES) {
         }
 
         const completedKeys = PROCESSING_STEPS.slice(0, stepIndex).map((item) => item.key);
+        const activeStep = getProcessingStep(stepKey);
         setProcessingState(createProcessingState({
           status: 'running',
           activeStepKey: stepKey,
           completedKeys,
           progress: getStepProgress(stepIndex),
+          message: activeStep?.description || '',
         }));
+        await waitForNextPaint();
       };
 
       const processedResult = await processPassportPhoto(reviewedPhoto, {
@@ -260,6 +291,7 @@ export function usePassportFlow(documentCatalog = DOCUMENT_TYPES) {
         activeStepKey: null,
         completedKeys: PROCESSING_STEPS.map((item) => item.key),
         progress: 100,
+        message: 'Your photo is ready.',
       }));
       navigate(VIEWS.review);
     } catch (error) {
@@ -287,9 +319,30 @@ export function usePassportFlow(documentCatalog = DOCUMENT_TYPES) {
   };
 
   const retakePhoto = () => {
-    clearProcessingState();
-    setDraftPhoto(null);
-    navigate(VIEWS.capture);
+    runIdRef.current += 1;
+
+    // URL + scroll must happen synchronously, same as navigate().
+    if (typeof window !== 'undefined') {
+      const nextPath = getPathForView(VIEWS.capture);
+      const nextUrl = `${nextPath}${window.location.search}${window.location.hash}`;
+      const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      if (nextUrl !== currentUrl) {
+        window.history.pushState({}, document.title, nextUrl);
+      }
+      window.scrollTo(0, 0);
+    }
+
+    // Batch every state reset together with the view change so the review
+    // guard never sees view=review + result=null + draftPhoto=null, which
+    // would redirect to home instead of capture.
+    startTransition(() => {
+      setSourcePhoto(null);
+      setResult(null);
+      setProcessingState(createIdleProcessingState());
+      setDraftPhoto(null);
+      setDraftPhotoAdjustments(DEFAULT_REVIEW_ADJUSTMENTS);
+      setView(VIEWS.capture);
+    });
   };
 
   const backToCapture = () => {
@@ -306,6 +359,7 @@ export function usePassportFlow(documentCatalog = DOCUMENT_TYPES) {
     preferredCaptureMode,
     captureMode,
     draftPhoto,
+    draftPhotoAdjustments,
     sourcePhoto,
     result,
     processingState,
@@ -316,6 +370,7 @@ export function usePassportFlow(documentCatalog = DOCUMENT_TYPES) {
     continueToCapture,
     setCaptureMode: setFlowCaptureMode,
     setDraftPhoto: setDraftSourcePhoto,
+    setDraftPhotoAdjustments: updateDraftPhotoAdjustments,
     startAutomaticProcessing,
     retakePhoto,
     backToCapture,

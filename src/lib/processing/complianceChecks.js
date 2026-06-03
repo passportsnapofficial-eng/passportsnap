@@ -159,6 +159,11 @@ function getValidationPolicy(documentType) {
   };
 }
 
+function isAutomaticBackgroundRemovalApplied(processed) {
+  const backgroundRemoval = processed.backgroundRemoval || processed.analysis?.backgroundRemoval;
+  return Boolean(backgroundRemoval?.applied);
+}
+
 const FRIENDLY_REJECTION_REASON_OVERRIDES = {
   faceDetected: 'Face not found',
   singleFace: 'Multiple faces detected',
@@ -271,6 +276,7 @@ export function buildComplianceChecks(processed, preset, documentType = null) {
     allowedBackgroundTones,
     preferredBackgroundTones,
     requiresUnalteredPhoto,
+    allowBackgroundCleanup,
     eyewearPolicy,
   } = getValidationPolicy(documentType);
   const backgroundTone = background.backgroundTone || 'other';
@@ -278,7 +284,11 @@ export function buildComplianceChecks(processed, preset, documentType = null) {
   const backgroundToneAllowed = allowedBackgroundTones.includes(backgroundTone);
   const backgroundTonePreferred = preferredBackgroundTones.includes(backgroundTone);
   const backgroundToneRecoverable = false;
-  const backgroundRemovalApplied = Boolean(processed.analysis?.backgroundRemoval?.applied);
+  const backgroundRemovalApplied = isAutomaticBackgroundRemovalApplied(processed);
+  const backgroundRemovalAttempted = Boolean(
+    processed.backgroundRemoval?.attempted || processed.analysis?.backgroundRemoval?.attempted,
+  );
+  const backgroundAdvisoryOnly = allowBackgroundCleanup && (backgroundRemovalAttempted || backgroundRemovalApplied);
   const highConfidenceEyewear =
     Boolean(eyewear.wearingGlasses) &&
     (
@@ -304,10 +314,10 @@ export function buildComplianceChecks(processed, preset, documentType = null) {
   const advisoryHarshShadow = true;
   const advisoryNeutralExpression = Boolean(primaryFace?.expressionBorderline);
   const advisoryMouthClosed = Boolean(primaryFace?.mouthClosedBorderline || primaryFace?.expressionBorderline);
-  const advisoryBackgroundPlain = backgroundRemovalApplied;
-  const advisoryBackgroundLight = backgroundRemovalApplied;
-  const advisoryBackgroundShadow = backgroundRemovalApplied;
-  const advisoryBackgroundDistractions = backgroundRemovalApplied;
+  const advisoryBackgroundPlain = backgroundAdvisoryOnly;
+  const advisoryBackgroundLight = backgroundAdvisoryOnly;
+  const advisoryBackgroundShadow = backgroundAdvisoryOnly;
+  const advisoryBackgroundDistractions = backgroundAdvisoryOnly;
   const faceSharpnessVariance = Number(sharpness?.faceLaplacianVariance || sharpness?.laplacianVariance || 0);
   const faceSharpnessEdgeDensity = Number(sharpness?.faceEdgeDensity || 0);
   const analysisQualityStrongEnough =
@@ -523,14 +533,20 @@ export function buildComplianceChecks(processed, preset, documentType = null) {
       {
         passed: 'Accepted background color detected',
         failed: 'Background color not accepted',
-        info: 'Background color accepted with caution',
+        info: 'Background color needs cleanup advice',
       },
-      backgroundToneAllowed ? CHECK_STATUSES.passed : CHECK_STATUSES.failed,
+      backgroundToneAllowed
+        ? CHECK_STATUSES.passed
+        : backgroundAdvisoryOnly
+          ? CHECK_STATUSES.info
+          : CHECK_STATUSES.failed,
       requiresUnalteredPhoto && !backgroundRemovalApplied
         ? `Use a ${acceptedBackgroundLabel} background. This document usually expects an unaltered photo, but the workflow will still try automatic cleanup before failing.`
-        : `Use a ${acceptedBackgroundLabel} background. If automatic cleanup cannot produce a clean white background, the photo is rejected.`,
+        : `Use a ${acceptedBackgroundLabel} background. A plain light backdrop still gives the cleanest automatic background removal.`,
       backgroundToneAllowed && !backgroundTonePreferred
         ? `${backgroundToneLabel} is allowed for this document, but the workflow prefers a clean white background when automatic cleanup succeeds.`
+        : !backgroundToneAllowed && backgroundAdvisoryOnly
+          ? `${backgroundToneLabel} was detected. The workflow can still continue, but a plain light background gives more reliable cleanup.`
         : '',
       {
         recoverable: backgroundToneRecoverable,

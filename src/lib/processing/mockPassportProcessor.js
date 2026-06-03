@@ -1,5 +1,6 @@
 import { US_PASSPORT_PRESET } from '../../data/sizePresets';
 import { PROCESSING_STEPS } from '../utils/constants';
+import { waitForNextPaint } from './browserYield';
 import {
   buildFriendlyRejectionReasons,
   buildComplianceChecks,
@@ -8,6 +9,10 @@ import {
   summarizeCompliance,
 } from './complianceChecks';
 import { exportPassportImage } from './exportPassportImage';
+
+function isAutomaticBackgroundRemovalApplied(exported) {
+  return Boolean(exported.backgroundRemoval?.applied);
+}
 
 function delay(ms) {
   return new Promise((resolve) => {
@@ -20,7 +25,8 @@ function getStepDuration(stepKey) {
 }
 
 async function reportProcessingStage(stepKey, onStageChange) {
-  onStageChange?.(stepKey);
+  await onStageChange?.(stepKey);
+  await waitForNextPaint();
 
   const durationMs = getStepDuration(stepKey);
   if (durationMs > 0) {
@@ -46,7 +52,7 @@ export async function processPassportPhoto(sourcePhoto, options = {}) {
   const backgroundToneLabel = exported.analysis.background.backgroundToneLabel || exported.analysis.background.backgroundTone || 'Other';
   const backgroundCleanupAllowed = Boolean(exported.editPolicy?.allowBackgroundCleanup);
   const requiresUnalteredPhoto = Boolean(exported.editPolicy?.requiresUnalteredPhoto);
-  const backgroundRemovalApplied = Boolean(exported.backgroundRemoval?.applied);
+  const backgroundRemovalApplied = isAutomaticBackgroundRemovalApplied(exported);
   const issueSummary = buildDetectedIssuesSummary(summary.failedChecks);
   const rejectionReasons =
     summary.status === 'passed'
@@ -130,6 +136,7 @@ export async function processPassportPhoto(sourcePhoto, options = {}) {
       outputHeight: exported.outputHeight,
       crop: exported.crop,
       analysis: exported.analysis,
+      enhancement: exported.enhancement,
       editPolicy: exported.editPolicy,
       heuristic: 'mediapipe-face-landmarker-worker-validation',
     },

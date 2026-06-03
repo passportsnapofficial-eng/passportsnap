@@ -1,5 +1,7 @@
 import { canvasToBlob, loadImageElement } from './cropUtils';
 import { removeBackgroundForPassportExport } from './backgroundRemovalClient';
+import { enhanceFinishedPassportPhoto } from './imageEnhancementClient';
+import { removeBackgroundWithSegmentationBackup } from '../backgroundRemoval/backups/localSegmentationFallback';
 import {
   detectPassportFaces,
   segmentPassportSubject,
@@ -12,6 +14,10 @@ const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 const TARGET_HEAD_RATIO = 0.58;
 const MIN_HEAD_RATIO = 0.49;
 const MAX_HEAD_RATIO = 0.69;
+const REMOVE_BG_MODEL = 'remove_bg_api';
+const DEFAULT_IMAGE_ENHANCEMENT_MODEL = 'realesr-general-x4v3';
+const DEFAULT_IMAGE_ENHANCEMENT_OUTSCALE = 2;
+const DEFAULT_IMAGE_ENHANCEMENT_DENOISE_STRENGTH = 0.5;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -39,6 +45,28 @@ function createBackgroundRemovalState(model) {
     foregroundRatio: 0,
     featherRatio: 0,
   };
+}
+
+function createImageEnhancementState(model, outscale, denoiseStrength) {
+  return {
+    attempted: false,
+    applied: false,
+    error: '',
+    model,
+    outscale,
+    denoiseStrength,
+    targetWidth: STANDARD_EXPORT_SIZE,
+    targetHeight: STANDARD_EXPORT_SIZE,
+  };
+}
+
+function normalizePositiveNumber(value, fallback) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+
+  return parsed;
 }
 
 function resolveEditingPolicy(validationPolicy = {}) {
@@ -87,122 +115,6 @@ function applyMicroTexture(context, width, height, pass = 1) {
   }
 
   context.putImageData(imageData, 0, 0);
-}
-
-function createSegmentationMaskCanvas(segmentation, targetWidth, targetHeight) {
-  if (!segmentation?.categoryMask?.data) {
-    return null;
-  }
-
-  const { data, width, height } = segmentation.categoryMask;
-  const foregroundIndexes = Array.isArray(segmentation.foregroundIndexes) && segmentation.foregroundIndexes.length
-    ? segmentation.foregroundIndexes
-    : [1];
-  const foregroundLookup = new Set(foregroundIndexes.map((value) => Number(value)));
-  const sourceCanvas = document.createElement('canvas');
-  const sourceContext = sourceCanvas.getContext('2d');
-
-  if (!sourceContext) {
-    return null;
-  }
-
-  sourceCanvas.width = width;
-  sourceCanvas.height = height;
-  const imageData = sourceContext.createImageData(width, height);
-  let foregroundPixels = 0;
-
-  for (let index = 0; index < data.length; index += 1) {
-    const isForeground = foregroundLookup.has(data[index]);
-    const offset = index * 4;
-
-    imageData.data[offset] = 255;
-    imageData.data[offset + 1] = 255;
-    imageData.data[offset + 2] = 255;
-    imageData.data[offset + 3] = isForeground ? 255 : 0;
-
-    if (isForeground) {
-      foregroundPixels += 1;
-    }
-  }
-
-  sourceContext.putImageData(imageData, 0, 0);
-
-  const scaledCanvas = document.createElement('canvas');
-  const scaledContext = scaledCanvas.getContext('2d');
-
-  if (!scaledContext) {
-    return null;
-  }
-
-  scaledCanvas.width = targetWidth;
-  scaledCanvas.height = targetHeight;
-  scaledContext.clearRect(0, 0, targetWidth, targetHeight);
-  scaledContext.imageSmoothingEnabled = true;
-  scaledContext.imageSmoothingQuality = 'high';
-  scaledContext.drawImage(sourceCanvas, 0, 0, targetWidth, targetHeight);
-
-  return {
-    canvas: scaledCanvas,
-    foregroundRatio: data.length ? foregroundPixels / data.length : 0,
-  };
-}
-
-async function removeBackgroundWithSegmentation(image, segmentation) {
-  const width = image.naturalWidth || image.width;
-  const height = image.naturalHeight || image.height;
-  const mask = createSegmentationMaskCanvas(segmentation, width, height);
-
-  if (!mask?.canvas) {
-    throw new Error('No usable segmentation mask was available for local background cleanup.');
-  }
-
-  const subjectCanvas = document.createElement('canvas');
-  const subjectContext = subjectCanvas.getContext('2d');
-
-  if (!subjectContext) {
-    throw new Error('Could not prepare the local background cleanup canvas.');
-  }
-
-  subjectCanvas.width = width;
-  subjectCanvas.height = height;
-  subjectContext.imageSmoothingEnabled = true;
-  subjectContext.imageSmoothingQuality = 'high';
-  subjectContext.drawImage(image, 0, 0, width, height);
-  subjectContext.globalCompositeOperation = 'destination-in';
-  subjectContext.drawImage(mask.canvas, 0, 0, width, height);
-  subjectContext.globalCompositeOperation = 'source-over';
-
-  const outputCanvas = document.createElement('canvas');
-  const outputContext = outputCanvas.getContext('2d');
-
-  if (!outputContext) {
-    throw new Error('Could not prepare the local background cleanup output.');
-  }
-
-  outputCanvas.width = width;
-  outputCanvas.height = height;
-  outputContext.fillStyle = '#ffffff';
-  outputContext.fillRect(0, 0, width, height);
-  outputContext.imageSmoothingEnabled = true;
-  outputContext.imageSmoothingQuality = 'high';
-  outputContext.drawImage(subjectCanvas, 0, 0, width, height);
-
-  const blob = await canvasToBlob(outputCanvas, 'image/jpeg', 0.96);
-  if (!blob) {
-    throw new Error('Local background cleanup did not return a usable photo.');
-  }
-
-  return {
-    applied: true,
-    dataUrl: await readBlobAsDataUrl(blob),
-    blob,
-    mimeType: blob.type || 'image/jpeg',
-    model: 'mediapipe_selfie_segmenter',
-    maskQuality: clamp(mask.foregroundRatio / 0.62, 0.2, 0.95),
-    transparentRatio: clamp(1 - mask.foregroundRatio, 0, 1),
-    foregroundRatio: clamp(mask.foregroundRatio, 0, 1),
-    featherRatio: 0,
-  };
 }
 
 function drawNormalizedPassportPhoto(context, image, headRatio = 0) {
@@ -275,7 +187,7 @@ async function encodeDownloadBlob(canvas) {
   return blob;
 }
 
-async function normalizeDownloadExport(exported) {
+async function normalizeDownloadExport(exported, options = {}) {
   if (!isUsableImageSource(exported?.dataUrl)) {
     throw new Error('No finished photo was produced.');
   }
@@ -296,6 +208,64 @@ async function normalizeDownloadExport(exported) {
     Number(exported.analysis?.framing?.headRatio || 0),
   );
 
+  let imageEnhancement = createImageEnhancementState(
+    options.imageEnhancementModel || DEFAULT_IMAGE_ENHANCEMENT_MODEL,
+    normalizePositiveNumber(
+      options.imageEnhancementOutscale,
+      DEFAULT_IMAGE_ENHANCEMENT_OUTSCALE,
+    ),
+    normalizePositiveNumber(
+      options.imageEnhancementDenoiseStrength,
+      DEFAULT_IMAGE_ENHANCEMENT_DENOISE_STRENGTH,
+    ),
+  );
+
+  if (options.imageEnhancementEnabled !== false) {
+    imageEnhancement.attempted = true;
+    await options.reportStage?.('enhance-photo');
+
+    try {
+      const enhancementInputBlob = await canvasToBlob(canvas, 'image/jpeg', 0.98);
+      if (!enhancementInputBlob) {
+        throw new Error('Could not prepare the finished photo for enhancement.');
+      }
+
+      const enhancementInputDataUrl = await readBlobAsDataUrl(enhancementInputBlob);
+      const enhanced = await enhanceFinishedPassportPhoto(enhancementInputDataUrl, {
+        model: imageEnhancement.model,
+        outscale: imageEnhancement.outscale,
+        denoiseStrength: imageEnhancement.denoiseStrength,
+        targetWidth: canvas.width,
+        targetHeight: canvas.height,
+      });
+
+      if (enhanced?.applied && isUsableImageSource(enhanced.dataUrl)) {
+        const enhancedImage = await loadImageElement(enhanced.dataUrl);
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = 'high';
+        context.drawImage(enhancedImage, 0, 0, canvas.width, canvas.height);
+        imageEnhancement = {
+          ...imageEnhancement,
+          ...enhanced,
+          applied: true,
+          targetWidth: canvas.width,
+          targetHeight: canvas.height,
+        };
+      }
+    } catch (error) {
+      imageEnhancement = {
+        ...imageEnhancement,
+        applied: false,
+        error:
+          error instanceof Error && error.message
+            ? error.message
+            : 'Image enhancement could not be completed. The current export was kept.',
+      };
+    }
+  }
+
   const blob = await encodeDownloadBlob(canvas);
   const dataUrl = await readBlobAsDataUrl(blob);
 
@@ -306,6 +276,7 @@ async function normalizeDownloadExport(exported) {
     outputWidth: STANDARD_EXPORT_SIZE,
     outputHeight: STANDARD_EXPORT_SIZE,
     targetAspectRatio: 1,
+    enhancement: imageEnhancement,
     analysis: {
       ...exported.analysis,
       technical: {
@@ -314,6 +285,11 @@ async function normalizeDownloadExport(exported) {
         outputHeight: STANDARD_EXPORT_SIZE,
         outputAspectRatio: 1,
         normalizedForDownload: true,
+        imageEnhancementAttempted: Boolean(imageEnhancement.attempted),
+        imageEnhanced: Boolean(imageEnhancement.applied),
+        imageEnhancementModel: imageEnhancement.model || null,
+        imageEnhancementScale: Number(imageEnhancement.outscale || 0),
+        imageEnhancementDenoiseStrength: Number(imageEnhancement.denoiseStrength || 0),
         finalFileSizeBytes: blob.size,
       },
     },
@@ -329,6 +305,7 @@ async function validateAndExportImage({
   backgroundRemoval,
   respectSourceFraming,
   reportStage,
+  imageEnhancementOptions,
 }) {
   if (!isUsableImageSource(exportSource)) {
     throw new Error('No export source was available.');
@@ -356,7 +333,10 @@ async function validateAndExportImage({
     },
   );
 
-  return normalizeDownloadExport(exported);
+  return normalizeDownloadExport(exported, {
+    reportStage,
+    ...imageEnhancementOptions,
+  });
 }
 
 export async function exportPassportImage(source, preset, options = {}) {
@@ -373,7 +353,27 @@ export async function exportPassportImage(source, preset, options = {}) {
   const configuredBackgroundRemovalModel =
     options.backgroundRemovalModel ||
     import.meta.env.VITE_BACKGROUND_REMOVAL_MODEL ||
-    'remove_bg_api';
+    REMOVE_BG_MODEL;
+  const imageEnhancementEnabled = options.imageEnhancementEnabled ?? (
+    import.meta.env.VITE_IMAGE_ENHANCEMENT_ENABLED !== 'false'
+  );
+  const imageEnhancementOptions = {
+    imageEnhancementEnabled,
+    imageEnhancementModel:
+      options.imageEnhancementModel ||
+      import.meta.env.VITE_IMAGE_ENHANCEMENT_MODEL ||
+      DEFAULT_IMAGE_ENHANCEMENT_MODEL,
+    imageEnhancementOutscale: normalizePositiveNumber(
+      options.imageEnhancementOutscale ||
+      import.meta.env.VITE_IMAGE_ENHANCEMENT_SCALE,
+      DEFAULT_IMAGE_ENHANCEMENT_OUTSCALE,
+    ),
+    imageEnhancementDenoiseStrength: normalizePositiveNumber(
+      options.imageEnhancementDenoiseStrength ||
+      import.meta.env.VITE_IMAGE_ENHANCEMENT_DENOISE,
+      DEFAULT_IMAGE_ENHANCEMENT_DENOISE_STRENGTH,
+    ),
+  };
   const {
     reportStage,
     respectSourceFraming = false,
@@ -406,29 +406,31 @@ export async function exportPassportImage(source, preset, options = {}) {
       backgroundRemoval = {
         ...backgroundRemoval,
         ...removedBackground,
-        applied: Boolean(removedBackground?.applied && isUsableImageSource(removedBackground?.dataUrl)),
+        applied: Boolean(
+          removedBackground?.applied &&
+          isUsableImageSource(removedBackground?.dataUrl)
+        ),
       };
-    } catch (error) {
+    } catch {
       try {
-        const removedBackground = await removeBackgroundWithSegmentation(image, segmentation);
+        const fallbackBackgroundRemoval = await removeBackgroundWithSegmentationBackup(image, segmentation);
+
         backgroundRemoval = {
           ...backgroundRemoval,
-          ...removedBackground,
-          applied: Boolean(removedBackground?.applied && isUsableImageSource(removedBackground?.dataUrl)),
+          ...fallbackBackgroundRemoval,
+          applied: Boolean(
+            fallbackBackgroundRemoval?.applied &&
+            isUsableImageSource(fallbackBackgroundRemoval?.dataUrl)
+          ),
           fallbackUsed: true,
-          error: '',
+          error: 'Automatic background cleanup needed a local fallback for this photo.',
         };
-      } catch (fallbackError) {
+      } catch {
         backgroundRemoval = {
           ...backgroundRemoval,
           applied: false,
-          fallbackUsed: true,
-          error:
-            fallbackError instanceof Error && fallbackError.message
-              ? fallbackError.message
-              : error instanceof Error && error.message
-                ? error.message
-                : 'Background cleanup was skipped for this photo.',
+          fallbackUsed: false,
+          error: 'Automatic background cleanup could not finish. The original background was kept.',
         };
       }
     }
@@ -455,6 +457,7 @@ export async function exportPassportImage(source, preset, options = {}) {
       backgroundRemoval,
       respectSourceFraming,
       reportStage,
+      imageEnhancementOptions,
     });
   } catch (error) {
     if (preferredExportSource !== source) {
@@ -462,28 +465,19 @@ export async function exportPassportImage(source, preset, options = {}) {
         ...backgroundRemoval,
         applied: false,
         fallbackUsed: true,
-        error:
-          backgroundRemoval.error ||
-          (error instanceof Error && error.message ? error.message : 'Background cleanup fallback was used.'),
+        error: 'Automatic background cleanup could not be verified, so the original background was kept.',
       };
-
-      try {
-        normalizedExport = await validateAndExportImage({
-          source,
-          exportSource: source,
-          preset,
-          faceDetection,
-          segmentation,
-          backgroundRemoval,
-          respectSourceFraming,
-          reportStage,
-        });
-      } catch (fallbackError) {
-        throw createRetakeError('We could not finish this photo. Please take one more and try again.', {
-          cause: fallbackError,
-          rejectionReasons: fallbackError?.rejectionReasons || error?.rejectionReasons || [],
-        });
-      }
+      normalizedExport = await validateAndExportImage({
+        source,
+        exportSource: source,
+        preset,
+        faceDetection,
+        segmentation,
+        backgroundRemoval,
+        respectSourceFraming,
+        reportStage,
+        imageEnhancementOptions,
+      });
     } else {
       throw createRetakeError('We could not finish this photo. Please take one more and try again.', {
         cause: error,

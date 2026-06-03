@@ -59,13 +59,14 @@ on conflict (id) do nothing;
 
 insert into public.admin_document_settings (document_id, price, is_active, display_order)
 values
-  ('us-passport', 14.99, true, 0),
-  ('canada-passport', 15.99, true, 1),
-  ('uk-passport', 12.99, true, 2),
-  ('schengen-visa', 12.99, true, 3),
-  ('india-passport', 13.99, true, 4),
-  ('japan-visa', 14.99, true, 5),
-  ('china-passport', 13.99, true, 6)
+  ('us-passport', 12.95, true, 0),
+  ('us-baby-passport', 12.95, true, 1),
+  ('canada-passport', 15.99, true, 2),
+  ('uk-passport', 12.99, true, 3),
+  ('schengen-visa', 12.99, true, 4),
+  ('india-passport', 13.99, true, 5),
+  ('japan-visa', 14.99, true, 6),
+  ('china-passport', 13.99, true, 7)
 on conflict (document_id) do nothing;
 
 alter table public.admin_site_settings enable row level security;

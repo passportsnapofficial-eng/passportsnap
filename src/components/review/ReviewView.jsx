@@ -1,4 +1,4 @@
-import { CheckCircle2, Download, Loader2, RefreshCcw, Sparkles } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Loader2, RefreshCcw, Sparkles } from 'lucide-react';
 import { CAPTURE_MODES, VIEWS } from '../../lib/utils/constants';
 import { FlowShell } from '../flow/FlowShell';
 import { FlagMark } from '../shared/FlagMark';
@@ -21,7 +21,7 @@ function getReviewCopy(result) {
       title: 'One quick step left',
       description: "Finish checkout and we'll handle the final cleanup before delivery.",
       canCheckout: true,
-      ctaLabel: 'Download',
+      ctaLabel: 'Proceed to checkout',
     };
   }
 
@@ -30,7 +30,7 @@ function getReviewCopy(result) {
     title: 'Your photo is ready',
     description: 'Take a look, then finish checkout to unlock the download.',
     canCheckout: true,
-    ctaLabel: 'Download',
+    ctaLabel: 'Proceed to checkout',
   };
 }
 
@@ -49,6 +49,12 @@ export function ReviewView({
   const retakeTips = rejectionReasons.length
     ? rejectionReasons
     : (result.failedChecks || []).slice(0, 3).map((item) => item.helpText || item.label);
+  const advisoryTips = Array.isArray(result.checks)
+    ? result.checks
+      .filter((item) => item.group === 'Background' && item.status === 'info')
+      .slice(0, 3)
+      .map((item) => item.noteText || item.helpText || item.label)
+    : [];
   const processingSummary = result.requiresPremiumRetouch
     ? 'Prepared for the final cleanup'
     : result.backgroundRemovalApplied
@@ -101,6 +107,46 @@ export function ReviewView({
             </div>
           </div>
 
+          <div className="mt-5 lg:hidden">
+            <div className="grid grid-cols-2 gap-3">
+              {copy.canCheckout ? (
+                <button
+                  type="button"
+                  onClick={onDownload}
+                  disabled={isNavigating}
+                  className="primary-button min-h-[52px] w-full justify-center px-3 disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isNavigating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ArrowRight className="h-4 w-4" />
+                  )}
+                  {isNavigating ? 'Opening…' : copy.ctaLabel}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onBack}
+                  disabled={isNavigating}
+                  className="secondary-button min-h-[52px] w-full justify-center px-3 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Back
+                </button>
+              )}
+              {copy.canCheckout ? (
+                <button
+                  type="button"
+                  onClick={onRetake}
+                  disabled={isNavigating}
+                  className="secondary-button min-h-[52px] w-full justify-center px-3 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <RefreshCcw className="h-4 w-4" />
+                  Retake
+                </button>
+              ) : null}
+            </div>
+          </div>
+
           {!copy.canCheckout && retakeTips.length ? (
             <div className="attention-card mt-5 rounded-[28px] border border-amber-200 bg-amber-50/90 p-5 sm:p-6">
               <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
@@ -109,6 +155,26 @@ export function ReviewView({
               </div>
               <div className="mt-4 space-y-3">
                 {retakeTips.map((item, index) => (
+                  <div
+                    key={item}
+                    className="animate-soft-pop rounded-2xl border border-amber-200/80 bg-white/80 px-4 py-3 text-sm leading-6 text-slate-700"
+                    style={{ animationDelay: `${index * 80}ms` }}
+                  >
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {copy.canCheckout && advisoryTips.length ? (
+            <div className="mt-5 rounded-[28px] border border-amber-200 bg-amber-50/90 p-5 sm:p-6">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                <Sparkles className="h-4 w-4 text-amber-700" />
+                Background advice
+              </div>
+              <div className="mt-4 space-y-3">
+                {advisoryTips.map((item, index) => (
                   <div
                     key={item}
                     className="animate-soft-pop rounded-2xl border border-amber-200/80 bg-white/80 px-4 py-3 text-sm leading-6 text-slate-700"
@@ -168,7 +234,7 @@ export function ReviewView({
                 : 'Retake the photo and we will build a cleaner version for you.'}
             </p>
 
-            <div className="mt-5 flex flex-col gap-3">
+            <div className="mt-5 hidden flex-col gap-3 lg:flex">
               {copy.canCheckout ? (
                 <button
                   type="button"
@@ -179,7 +245,7 @@ export function ReviewView({
                   {isNavigating ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    <Download className="h-4 w-4" />
+                    <ArrowRight className="h-4 w-4" />
                   )}
                   {isNavigating ? 'Opening checkout…' : copy.ctaLabel}
                 </button>
@@ -213,6 +279,33 @@ export function ReviewView({
           ) : null}
         </aside>
       </div>
+
+      {!copy.canCheckout ? (
+        <div className="lg:hidden">
+          <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-4 pb-4">
+            <div className="pointer-events-auto mx-auto flex max-w-[1120px] gap-3 rounded-[24px] border border-slate-200 bg-white/96 p-3 shadow-[0_-10px_40px_-24px_rgba(15,23,42,0.3)] backdrop-blur">
+              <button
+                type="button"
+                onClick={onBack}
+                disabled={isNavigating}
+                className="secondary-button min-h-[52px] flex-1 justify-center disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={onRetake}
+                disabled={isNavigating}
+                className="primary-button min-h-[52px] flex-1 justify-center disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                <RefreshCcw className="h-4 w-4" />
+                Retake Photo
+              </button>
+            </div>
+          </div>
+          <div className="h-24" aria-hidden="true" />
+        </div>
+      ) : null}
     </FlowShell>
   );
 }

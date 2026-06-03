@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { AdminView } from './components/admin/AdminView';
+import { AboutView } from './components/about/AboutView';
 import { AuthDialog } from './components/auth/AuthDialog';
 import { CartView } from './components/checkout/CartView';
 import { CheckoutView } from './components/checkout/CheckoutView';
@@ -16,7 +17,15 @@ import { ReviewView } from './components/review/ReviewView';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { usePassportFlow } from './hooks/usePassportFlow';
 import { useSupabaseAuth } from './hooks/useSupabaseAuth';
-import { computeCheckoutTotals } from './lib/checkout/pricing';
+import {
+  computeCheckoutTotals,
+  DEFAULT_PRINT_COPIES,
+  getPhotoPackageLabel,
+  normalizeCheckoutOptions,
+  PHOTO_PACKAGE_TYPES,
+} from './lib/checkout/pricing';
+import { requestOrderDeliveryEmail } from './lib/orders/orderDeliveryClient.js';
+import { recordOrderForAdmin } from './lib/orders/orderRecordClient.js';
 import { buildStripeReturnUrl, initializeStripePayment, verifyStripePayment } from './lib/payments/stripeClient';
 import { fetchPublicSiteSettings } from './lib/settings/settingsClient.js';
 import { buildActiveDocumentCatalog, getSiteDocumentSetting, normalizeSiteSettings } from './lib/settings/siteSettings.js';
@@ -62,30 +71,89 @@ function cartRequiresPremiumRetouch(items = []) {
   return items.some((item) => item.requiresPremiumRetouch);
 }
 
-function buildServiceSummary(items) {
+function getDefaultCartOptions() {
+  return {
+    photoPackage: PHOTO_PACKAGE_TYPES.digital,
+    printCopies: DEFAULT_PRINT_COPIES,
+    complianceCheck: false,
+    photoRetouching: false,
+    premiumRetouch: false,
+  };
+}
+
+function getResolvedCheckoutOptions(cartOptions, premiumRetouchRequired) {
+  return normalizeCheckoutOptions(cartOptions, premiumRetouchRequired);
+}
+
+function buildServiceSummary(items, checkoutOptions = getDefaultCartOptions()) {
   if (!items.length) return 'Passport photo order';
-  if (items.length === 1) return items[0].documentName;
-  return `${items[0].documentName} + ${items.length - 1} more`;
+  const base =
+    items.length === 1
+      ? items[0].documentName
+      : `${items[0].documentName} + ${items.length - 1} more`;
+  const extras = [
+    getPhotoPackageLabel(checkoutOptions.photoPackage, checkoutOptions.printCopies),
+    checkoutOptions.complianceCheck ? 'Compliance check' : null,
+    checkoutOptions.photoRetouching ? 'Photo retouching' : null,
+    checkoutOptions.premiumRetouch ? 'Background cleanup' : null,
+  ].filter(Boolean);
+  return `${base} · ${extras.join(' · ')}`;
 }
 
-function buildOrderStatus(premiumRetouch) {
-  return premiumRetouch ? 'Paid - premium review requested' : 'Paid';
+function buildOrderStatus(options) {
+  if (options.photoRetouching || options.complianceCheck || options.premiumRetouch) {
+    return 'Paid - fulfillment pending';
+  }
+
+  if (options.photoPackage === PHOTO_PACKAGE_TYPES.digitalPrints) {
+    return 'Paid - print delivery pending';
+  }
+
+  return 'Paid';
 }
 
-function buildCompletedOrder({ verification, cartItems, premiumRetouch }) {
-  const downloadOwnerName = verification.customer?.name || 'Customer';
+function buildCompletedOrder({ verification, cartItems, checkoutOptions }) {
+  const customerName = verification.customer?.name || 'Customer';
+  const customerFirstName = verification.customer?.firstName || '';
+  const customerLastName = verification.customer?.lastName || '';
+  const customerEmail = verification.customer?.email || '';
+  const customerPhone = verification.customer?.phone || '';
+  const shippingAddress = verification.shippingAddress || null;
+  const downloadOwnerName = customerName;
   const orderItems = cartItems.map((item) => ({
     ...item,
-    premiumRetouch,
+    premiumRetouch: checkoutOptions.premiumRetouch,
+    photoPackage: checkoutOptions.photoPackage,
+    printCopies: checkoutOptions.printCopies,
+    complianceCheck: checkoutOptions.complianceCheck,
+    photoRetouching: checkoutOptions.photoRetouching,
+    customerName,
+    customerFirstName,
+    customerLastName,
+    customerEmail,
+    customerPhone,
+    receiptEmail: customerEmail,
+    deliveryEmail: verification.deliveryEmail || verification.customer?.email || '',
+    shippingAddress,
+    manualFulfillmentRequired: Boolean(
+      verification.complianceCheck || verification.photoRetouching || verification.premiumRetouch,
+    ),
     downloadOwnerName,
   }));
 
   return {
     id: verification.orderReference || verification.paymentReference,
     date: verification.paidAt || new Date().toISOString(),
-    status: buildOrderStatus(premiumRetouch),
+    status: buildOrderStatus(checkoutOptions),
     subtotal: Number(verification.subtotal || 0),
-    premiumRetouch,
+    photoPackage: verification.photoPackage || checkoutOptions.photoPackage,
+    printCopies: Number(verification.printCopies || checkoutOptions.printCopies || DEFAULT_PRINT_COPIES),
+    printPackageFee: Number(verification.printPackageFee || 0),
+    complianceCheck: Boolean(verification.complianceCheck ?? checkoutOptions.complianceCheck),
+    complianceCheckFee: Number(verification.complianceCheckFee || 0),
+    photoRetouching: Boolean(verification.photoRetouching ?? checkoutOptions.photoRetouching),
+    photoRetouchingFee: Number(verification.photoRetouchingFee || 0),
+    premiumRetouch: Boolean(verification.premiumRetouch ?? checkoutOptions.premiumRetouch),
     premiumFee: Number(verification.premiumFee || 0),
     total: Number(verification.total || verification.amount || 0),
     paymentCurrency: verification.currency,
@@ -93,26 +161,117 @@ function buildCompletedOrder({ verification, cartItems, premiumRetouch }) {
     paymentGatewayResponse: verification.gatewayResponse,
     paymentReference: verification.paymentReference,
     paymentVerifiedAt: new Date().toISOString(),
+    guestCheckout: !verification.savedToDashboard,
+    emailDeliveryStatus: 'pending',
+    emailDeliveryMessage: '',
     items: orderItems,
-    serviceSummary: buildServiceSummary(orderItems),
+    serviceSummary: buildServiceSummary(orderItems, checkoutOptions),
   };
+}
+
+async function sendFinishedOrderEmail(order) {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  const hasDeliverableImage = items.some((item) => {
+    if (item?.fulfilledPhoto) {
+      return true;
+    }
+
+    return !item?.manualFulfillmentRequired && Boolean(item?.photo);
+  });
+
+  if (!order || !hasDeliverableImage) {
+    return {
+      ok: false,
+      skipped: true,
+      reason: 'missing_finished_images',
+      status: 'pending_manual_fulfillment',
+      message: 'The final photo will be emailed after fulfillment is completed.',
+    };
+  }
+
+  try {
+    const result = await requestOrderDeliveryEmail({
+      orderId: order.id,
+      paymentReference: order.paymentReference,
+      total: order.total,
+      currency: order.paymentCurrency,
+      customerName: items[0]?.customerName || '',
+      customerEmail: items[0]?.customerEmail || '',
+      receiptEmail: items[0]?.receiptEmail || '',
+      deliveryEmail: items[0]?.deliveryEmail || '',
+      items,
+    });
+    return {
+      ...result,
+      status: result?.ok ? 'sent' : 'not_sent',
+      message: result?.ok
+        ? `Finished photo emailed to ${result.recipientEmail}.`
+        : 'The finished photo email could not be confirmed.',
+    };
+  } catch {
+    return {
+      ok: false,
+      skipped: true,
+      reason: 'delivery_failed',
+      status: 'failed',
+      message: 'The photo is ready, but the email delivery did not complete.',
+    };
+  }
 }
 
 function upsertOrderInCollection(collection, order) {
   return [order, ...collection.filter((entry) => entry.id !== order.id)];
 }
 
+function normalizeEmailAddress(value = '') {
+  return String(value || '').trim().toLowerCase();
+}
+
+function orderMatchesUserEmail(order, userEmail = '') {
+  const normalizedUserEmail = normalizeEmailAddress(userEmail);
+  if (!normalizedUserEmail) {
+    return false;
+  }
+
+  const orderItems = Array.isArray(order?.items) ? order.items : [];
+  const orderEmails = orderItems.flatMap((item) => ([
+    item?.customerEmail,
+    item?.receiptEmail,
+    item?.deliveryEmail,
+  ].map(normalizeEmailAddress))).filter(Boolean);
+
+  return orderEmails.includes(normalizedUserEmail);
+}
+
+function dedupeOrdersByIdentity(orders = []) {
+  const seen = new Set();
+
+  return orders.filter((order) => {
+    const key = `${String(order?.id || '').trim()}::${String(order?.paymentReference || '').trim()}`;
+    if (!key || seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+}
+
 function extractStripeReturn() {
   const url = new URL(window.location.href);
   const sessionId = url.searchParams.get('session_id');
   const state = url.searchParams.get('stripe');
+  const normalizedSessionId =
+    sessionId && sessionId !== '{CHECKOUT_SESSION_ID}'
+      ? sessionId
+      : null;
 
-  if (!sessionId && state !== 'cancelled') {
+  if (!normalizedSessionId && state !== 'cancelled' && sessionId !== '{CHECKOUT_SESSION_ID}') {
     return null;
   }
 
   return {
-    sessionId,
+    sessionId: normalizedSessionId,
     state,
   };
 }
@@ -193,6 +352,43 @@ function normalizeErrorMessage(error, fallbackMessage) {
   return fallbackMessage;
 }
 
+function wait(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+function shouldRetryPaymentVerification(error) {
+  if (!error) return false;
+
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : typeof error?.message === 'string'
+          ? error.message
+          : '';
+
+  const normalizedMessage = String(message).toLowerCase();
+  const statusCode =
+    typeof error?.statusCode === 'number'
+      ? error.statusCode
+      : typeof error?.payload?.statusCode === 'number'
+        ? error.payload.statusCode
+        : null;
+
+  return (
+    statusCode === 500 ||
+    statusCode === 409 ||
+    normalizedMessage.includes('unable to verify payment right now') ||
+    normalizedMessage.includes('unable to confirm this payment right now') ||
+    normalizedMessage.includes('payment is not confirmed yet') ||
+    normalizedMessage.includes('payment verification is taking too long') ||
+    normalizedMessage.includes('please check again')
+  );
+}
+
 function syncCartPricesWithSettings(items = [], siteSettings) {
   let didChange = false;
 
@@ -214,6 +410,13 @@ function syncCartPricesWithSettings(items = [], siteSettings) {
   return didChange ? nextItems : items;
 }
 
+function buildCheckoutCartPayload(items = []) {
+  return items.map((item) => ({
+    documentId: String(item?.documentId || '').trim(),
+    requiresPremiumRetouch: Boolean(item?.requiresPremiumRetouch),
+  }));
+}
+
 export default function App() {
   const [siteSettings, setSiteSettings] = useState(() => normalizeSiteSettings({}));
   const documentCatalog = buildActiveDocumentCatalog(siteSettings);
@@ -222,9 +425,7 @@ export default function App() {
   const [isNavigating, startNavigation] = useTransition();
   const [cart, setCart] = useLocalStorage(STORAGE_KEYS.cart, [], LEGACY_STORAGE_KEYS.cart);
   const [localOrders, setLocalOrders] = useLocalStorage(STORAGE_KEYS.orders, [], LEGACY_STORAGE_KEYS.orders);
-  const [cartOptions, setCartOptions] = useLocalStorage(STORAGE_KEYS.cartOptions, {
-    premiumRetouch: false,
-  });
+  const [cartOptions, setCartOptions] = useLocalStorage(STORAGE_KEYS.cartOptions, getDefaultCartOptions());
   const [pendingPayment, setPendingPayment] = useLocalStorage(STORAGE_KEYS.pendingPayment, null);
   const [orders, setOrders] = useState(localOrders);
   const [ordersLoading, setOrdersLoading] = useState(false);
@@ -244,8 +445,8 @@ export default function App() {
   const localOrdersRef = useRef(localOrders);
   const authUserId = auth.user?.id || null;
   const premiumRetouchRequired = cartRequiresPremiumRetouch(cart);
-  const premiumRetouchEnabled = cartOptions.premiumRetouch || premiumRetouchRequired;
-  const totals = computeCheckoutTotals(cart, premiumRetouchEnabled, siteSettings);
+  const checkoutOptions = getResolvedCheckoutOptions(cartOptions, premiumRetouchRequired);
+  const totals = computeCheckoutTotals(cart, checkoutOptions, siteSettings, premiumRetouchRequired);
   const recentOrder =
     orders.find((order) => order.id === lastOrderId) ||
     localOrders.find((order) => order.id === lastOrderId) ||
@@ -279,10 +480,10 @@ export default function App() {
   }, [setCart, siteSettings]);
 
   useEffect(() => {
-    if (!cart.length && cartOptions.premiumRetouch) {
-      setCartOptions({ premiumRetouch: false });
+    if (!cart.length) {
+      setCartOptions(getDefaultCartOptions());
     }
-  }, [cart.length, cartOptions.premiumRetouch, setCartOptions]);
+  }, [cart.length, setCartOptions]);
 
   useEffect(() => {
     if (!auth.user) {
@@ -306,26 +507,46 @@ export default function App() {
         return;
       }
 
-      if (!auth.user) {
-        setCheckoutLoading(false);
-        setPaymentState({
-          status: 'error',
-          message: 'Sign in to finish confirming this payment and save the order.',
-        });
-        setAuthDialogState({ open: true, mode: 'signin', targetView: VIEWS.checkout });
-        flow.navigate(VIEWS.checkout);
-        return;
-      }
-
       setCheckoutLoading(false);
       setPaymentState({
         status: 'verifying',
-        message: 'Verifying your payment before saving the order to your dashboard.',
+        message: auth.user
+          ? 'Verifying your payment and saving the order.'
+          : 'Verifying your payment and preparing the order.',
       });
       flow.navigate(VIEWS.checkout);
 
       try {
-        const verification = await verifyStripePayment(sessionId);
+        let verification = null;
+        let lastVerificationError = null;
+
+        for (let attempt = 0; attempt < 12; attempt += 1) {
+          try {
+            verification = await verifyStripePayment(sessionId);
+            lastVerificationError = null;
+            break;
+          } catch (error) {
+            lastVerificationError = error;
+
+            if (!shouldRetryPaymentVerification(error) || attempt === 5) {
+              throw error;
+            }
+
+            setPaymentState({
+              status: 'verifying',
+              message: `Confirming payment with Stripe${attempt >= 2 ? ' still' : ''}. Please wait...`,
+            });
+            await wait(attempt >= 5 ? 3000 : 2000);
+          }
+        }
+
+        if (!verification) {
+          throw lastVerificationError || new Error('Unable to verify payment right now.');
+        }
+
+        const verifiedSessionId = String(
+          verification.sessionId || verification.paymentReference || '',
+        ).trim();
 
         const existingOrder =
           orders.find(
@@ -347,14 +568,17 @@ export default function App() {
           return;
         }
 
-        if (pendingPayment?.userId && pendingPayment.userId !== auth.user.id) {
+        if (pendingPayment?.userId && auth.user && pendingPayment.userId !== auth.user.id) {
           throw new Error('This payment was started under a different account.');
         }
 
         const paidCart = pendingPayment?.cartSnapshot?.length ? pendingPayment.cartSnapshot : cart;
-        const premiumRetouch = pendingPayment?.premiumRetouch ?? premiumRetouchEnabled;
+        const paidCheckoutOptions = getResolvedCheckoutOptions(
+          pendingPayment?.checkoutOptions || checkoutOptions,
+          premiumRetouchRequired,
+        );
 
-        if (pendingPayment?.sessionId && pendingPayment.sessionId !== verification.paymentReference) {
+        if (pendingPayment?.sessionId && pendingPayment.sessionId !== verifiedSessionId) {
           throw new Error('The returned payment session did not match the initialized checkout.');
         }
 
@@ -369,14 +593,16 @@ export default function App() {
         const nextOrder = buildCompletedOrder({
           verification,
           cartItems: paidCart,
-          premiumRetouch,
+          checkoutOptions: paidCheckoutOptions,
         });
 
         let syncedOrder = nextOrder;
+        let savedToDashboard = false;
 
         try {
-          if (auth.configured) {
+          if (auth.configured && auth.user) {
             syncedOrder = await upsertOrderForUser(nextOrder, auth.user.id);
+            savedToDashboard = true;
             setDashboardState({ status: 'success', message: 'Payment verified and order saved to your account.' });
           }
         } catch (syncError) {
@@ -389,11 +615,37 @@ export default function App() {
           });
         }
 
+        syncedOrder = {
+          ...syncedOrder,
+          guestCheckout: !savedToDashboard,
+        };
+
+        const emailDelivery = await sendFinishedOrderEmail(syncedOrder);
+
+        syncedOrder = {
+          ...syncedOrder,
+          emailDeliveryStatus: emailDelivery?.status || 'failed',
+          emailDeliveryMessage: emailDelivery?.message || '',
+        };
+
+        try {
+          await recordOrderForAdmin(syncedOrder);
+        } catch {
+          setDashboardState((current) => (
+            current.status === 'error'
+              ? current
+              : {
+                  status: 'error',
+                  message: 'Payment cleared, but the admin image archive did not finish syncing.',
+                }
+          ));
+        }
+
         setLocalOrders((current) => upsertOrderInCollection(current, syncedOrder));
         setOrders((current) => upsertOrderInCollection(current, syncedOrder));
         setLastOrderId(syncedOrder.id);
         setCart([]);
-        setCartOptions({ premiumRetouch: false });
+        setCartOptions(getDefaultCartOptions());
         setPendingPayment(null);
         setPaymentState({ status: 'success', message: 'Payment verified successfully.' });
         flow.navigate(VIEWS.success);
@@ -417,7 +669,8 @@ export default function App() {
       localOrders,
       orders,
       pendingPayment,
-      premiumRetouchEnabled,
+      checkoutOptions,
+      premiumRetouchRequired,
       setCart,
       setCartOptions,
       setLocalOrders,
@@ -441,9 +694,51 @@ export default function App() {
         const remoteOrders = await listOrdersForUser(authUserId);
         if (cancelled) return;
 
-        setOrders(remoteOrders);
-        setLocalOrders(remoteOrders);
-        setDashboardState({ status: 'success', message: 'Your order history is up to date.' });
+        const matchingGuestOrders = dedupeOrdersByIdentity(
+          localOrdersRef.current.filter(
+            (order) =>
+              order?.guestCheckout &&
+              orderMatchesUserEmail(order, auth.user?.email || ''),
+          ),
+        );
+
+        let nextOrders = remoteOrders;
+
+        if (matchingGuestOrders.length) {
+          const syncedGuestOrders = [];
+
+          for (const guestOrder of matchingGuestOrders) {
+            const syncedGuestOrder = await upsertOrderForUser(
+              {
+                ...guestOrder,
+                guestCheckout: false,
+              },
+              authUserId,
+            );
+
+            syncedGuestOrders.push({
+              ...syncedGuestOrder,
+              guestCheckout: false,
+            });
+          }
+
+          nextOrders = dedupeOrdersByIdentity([
+            ...syncedGuestOrders,
+            ...remoteOrders,
+          ]);
+
+          if (!cancelled) {
+            setDashboardState({
+              status: 'success',
+              message: 'Payment successful. Your paid photos were saved to your dashboard.',
+            });
+          }
+        } else {
+          setDashboardState({ status: 'success', message: 'Your order history is up to date.' });
+        }
+
+        setOrders(nextOrders);
+        setLocalOrders(nextOrders);
       } catch (error) {
         if (cancelled) return;
 
@@ -464,7 +759,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [auth.configured, authUserId, setLocalOrders]);
+  }, [auth.configured, auth.user?.email, authUserId, setLocalOrders]);
 
   useEffect(() => {
     if (auth.loading || handledStripeReturnRef.current) return;
@@ -491,7 +786,7 @@ export default function App() {
     const handlePaymentReturn = async () => {
       clearStripeReturnFromUrl();
       if (cancelled) return;
-      await finalizeVerifiedPayment(paymentReturn.sessionId);
+      await finalizeVerifiedPayment(paymentReturn.sessionId || pendingPayment?.sessionId || '');
     };
 
     handlePaymentReturn();
@@ -503,6 +798,7 @@ export default function App() {
     auth.loading,
     finalizeVerifiedPayment,
     flow,
+    pendingPayment?.sessionId,
     setPendingPayment,
   ]);
 
@@ -516,14 +812,15 @@ export default function App() {
       [VIEWS.home]: 'PassportSnap',
       [VIEWS.document]: 'Choose Your Document',
       [VIEWS.capture]: 'Take a Selfie',
-      [VIEWS.review]: 'Download Your Photo',
+      [VIEWS.review]: 'Review Your Photo',
       [VIEWS.processing]: 'Getting Your Photo Ready',
-      [VIEWS.result]: 'Download Your Photo',
+      [VIEWS.result]: 'Review Your Photo',
       [VIEWS.cart]: 'Cart',
       [VIEWS.checkout]: 'Checkout',
       [VIEWS.success]: 'Order Confirmed',
       [VIEWS.dashboard]: 'Orders Dashboard',
       [VIEWS.admin]: 'Admin Dashboard',
+      [VIEWS.about]: 'About PassportSnap',
       [VIEWS.privacy]: 'Privacy Policy',
       [VIEWS.terms]: 'Terms of Use',
     };
@@ -561,6 +858,10 @@ export default function App() {
 
   const openTermsPage = () => {
     flow.navigate(VIEWS.terms);
+  };
+
+  const openAboutPage = () => {
+    flow.navigate(VIEWS.about);
   };
 
   const logout = async () => {
@@ -641,14 +942,30 @@ export default function App() {
 
   const handleTogglePremium = () => {
     if (premiumRetouchRequired) return;
-    setCartOptions((current) => ({ premiumRetouch: !current.premiumRetouch }));
+    setCartOptions((current) => ({ ...current, premiumRetouch: !current.premiumRetouch }));
+  };
+
+  const handlePhotoPackageChange = (photoPackage) => {
+    setCartOptions((current) => ({ ...current, photoPackage }));
+  };
+
+  const handlePrintCopiesChange = (printCopies) => {
+    setCartOptions((current) => ({ ...current, printCopies }));
+  };
+
+  const handleComplianceCheckToggle = () => {
+    setCartOptions((current) => ({ ...current, complianceCheck: !current.complianceCheck }));
+  };
+
+  const handlePhotoRetouchingToggle = () => {
+    setCartOptions((current) => ({ ...current, photoRetouching: !current.photoRetouching }));
   };
 
   const handleRemoveCartItem = (index) => {
     const nextCart = cart.filter((_, itemIndex) => itemIndex !== index);
     setCart(nextCart);
     if (!nextCart.length) {
-      setCartOptions({ premiumRetouch: false });
+      setCartOptions(getDefaultCartOptions());
     }
   };
 
@@ -680,20 +997,11 @@ export default function App() {
     event.preventDefault();
     if (!cart.length) return;
 
-    if (!auth.configured) {
+    if (auth.loading) {
       setPaymentState({
         status: 'error',
-        message: 'Account checkout is unavailable right now. Please try again later.',
+        message: 'Account status is still loading. Please try again in a moment.',
       });
-      return;
-    }
-
-    if (auth.loading || !auth.user) {
-      setPaymentState({
-        status: 'error',
-        message: 'Create an account or sign in before payment so the order can be saved to your dashboard.',
-      });
-      openAuthDialog('signin', VIEWS.checkout);
       return;
     }
 
@@ -703,34 +1011,69 @@ export default function App() {
     const formData = new FormData(event.currentTarget);
     const firstName = String(formData.get('firstName') || '').trim();
     const lastName = String(formData.get('lastName') || '').trim();
+    const email = String(formData.get('email') || '').trim();
     const phone = String(formData.get('phone') || '').trim();
-    const fullName = [firstName, lastName].filter(Boolean).join(' ') || auth.user.name || 'Customer';
-    const email = auth.user.email;
+    const deliveryEmail = String(formData.get('deliveryEmail') || '').trim();
+    const addressLine1 = String(formData.get('addressLine1') || '').trim();
+    const addressLine2 = String(formData.get('addressLine2') || '').trim();
+    const city = String(formData.get('city') || '').trim();
+    const stateProvince = String(formData.get('stateProvince') || '').trim();
+    const postalCode = String(formData.get('postalCode') || '').trim();
+    const country = String(formData.get('country') || '').trim();
+    const requiresPhysicalDeliveryAddress = checkoutOptions.photoPackage === PHOTO_PACKAGE_TYPES.digitalPrints;
+    const shippingAddress = requiresPhysicalDeliveryAddress
+      ? {
+          addressLine1,
+          addressLine2,
+          city,
+          stateProvince,
+          postalCode,
+          country,
+        }
+      : null;
+
+    const manualFulfillmentRequired =
+      checkoutOptions.complianceCheck || checkoutOptions.photoRetouching || checkoutOptions.premiumRetouch;
+    const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+    // Manual services (compliance/retouch/premium) deliver the corrected digital
+    // image by email even for print orders, so always fall back to the customer's
+    // email here. The server rejects manual-service orders with no delivery email.
+    const resolvedDeliveryEmail = deliveryEmail || email;
 
     try {
-      await auth.saveProfile({ fullName, phone });
+      if (auth.user && (fullName || phone)) {
+        await auth.saveProfile({ fullName, phone });
+      }
 
       const initializedPayment = await initializeStripePayment({
         email,
         firstName,
         lastName,
         phone,
-        cartItems: cart,
-        premiumRetouch: premiumRetouchEnabled,
+        deliveryEmail: manualFulfillmentRequired ? resolvedDeliveryEmail : '',
+        shippingAddress,
+        cartItems: buildCheckoutCartPayload(cart),
+        checkoutOptions,
         returnUrl: buildStripeReturnUrl(),
       });
 
       setPendingPayment({
         sessionId: initializedPayment.sessionId,
         orderReference: initializedPayment.orderReference,
-        userId: auth.user.id,
+        userId: auth.user?.id || null,
         cartSnapshot: cart,
-        premiumRetouch: premiumRetouchEnabled,
+        checkoutOptions,
         email,
         firstName,
         lastName,
         phone,
+        deliveryEmail: manualFulfillmentRequired ? resolvedDeliveryEmail : '',
+        shippingAddress,
         subtotal: initializedPayment.subtotal,
+        printCopies: initializedPayment.printCopies,
+        printPackageFee: initializedPayment.printPackageFee,
+        complianceCheckFee: initializedPayment.complianceCheckFee,
+        photoRetouchingFee: initializedPayment.photoRetouchingFee,
         premiumFee: initializedPayment.premiumFee,
         total: initializedPayment.total,
         amountMinor: initializedPayment.amountMinor,
@@ -752,9 +1095,10 @@ export default function App() {
   };
 
   const handleDownload = (item, orderId = '') => {
-    if (!item?.photo) return;
+    const imageUrl = item?.fulfilledPhoto || item?.photo;
+    if (!imageUrl) return;
     const ownerName = auth.user?.name || item.downloadOwnerName || orderId || 'customer';
-    downloadImage(item.photo, formatDownloadFilename(item, ownerName));
+    downloadImage(imageUrl, formatDownloadFilename(item, ownerName));
   };
 
   const buildCheckoutItemFromFlowResult = () => {
@@ -774,6 +1118,7 @@ export default function App() {
       backgroundLabel: flow.result.backgroundLabel || flow.selectedDocument.backgroundLabel,
       basePrice: getSiteDocumentSetting(flow.selectedDocument.id, siteSettings)?.price || flow.selectedDocument.price || 0,
       photo: flow.result.processedPhoto,
+      sourcePhoto: flow.result.sourcePhoto || '',
       outputWidth: flow.result.outputWidth,
       outputHeight: flow.result.outputHeight,
       statusLabel: flow.result.headline || flow.result.status,
@@ -794,11 +1139,6 @@ export default function App() {
     }
 
     // Auth dialog must open immediately (synchronous), not inside a transition.
-    if (!auth.loading && !auth.user && auth.configured) {
-      openAuthDialog('signin', VIEWS.checkout);
-      return;
-    }
-
     // Batch all cart mutations + the view switch together as a single
     // non-urgent transition so the button paints feedback instantly.
     startNavigation(() => {
@@ -808,14 +1148,7 @@ export default function App() {
       });
       setCheckoutOrigin(VIEWS.result);
 
-      if (!auth.configured) {
-        setPaymentState({
-          status: 'error',
-          message: 'Secure checkout is unavailable right now. Please try again later.',
-        });
-      } else {
-        setPaymentState({ status: 'idle', message: '' });
-      }
+      setPaymentState({ status: 'idle', message: '' });
 
       flow.navigate(VIEWS.checkout);
     });
@@ -843,7 +1176,9 @@ export default function App() {
             selectedPreset={flow.selectedPreset}
             captureMode={flow.captureMode}
             draftPhoto={flow.draftPhoto}
+            draftPhotoAdjustments={flow.draftPhotoAdjustments}
             onDraftChange={flow.setDraftPhoto}
+            onDraftPhotoAdjustmentsChange={flow.setDraftPhotoAdjustments}
             onCaptureModeChange={flow.setCaptureMode}
             onContinue={flow.startAutomaticProcessing}
             onBack={() => flow.navigate(VIEWS.document)}
@@ -865,7 +1200,9 @@ export default function App() {
             selectedPreset={flow.selectedPreset}
             captureMode={flow.captureMode}
             draftPhoto={flow.draftPhoto}
+            draftPhotoAdjustments={flow.draftPhotoAdjustments}
             onDraftChange={flow.setDraftPhoto}
+            onDraftPhotoAdjustmentsChange={flow.setDraftPhotoAdjustments}
             onCaptureModeChange={flow.setCaptureMode}
             onContinue={flow.startAutomaticProcessing}
             onBack={() => flow.navigate(VIEWS.document)}
@@ -899,9 +1236,16 @@ export default function App() {
           <CartView
             cart={cart}
             totals={totals}
-            premiumRetouch={premiumRetouchEnabled}
+            checkoutOptions={checkoutOptions}
+            printCopyFees={siteSettings}
+            complianceCheckFee={siteSettings.complianceCheckFee}
+            photoRetouchingFee={siteSettings.photoRetouchingFee}
             premiumRetouchFee={siteSettings.premiumRetouchFee}
             premiumRetouchRequired={premiumRetouchRequired}
+            onPhotoPackageChange={handlePhotoPackageChange}
+            onPrintCopiesChange={handlePrintCopiesChange}
+            onToggleComplianceCheck={handleComplianceCheckToggle}
+            onTogglePhotoRetouching={handlePhotoRetouchingToggle}
             onTogglePremium={handleTogglePremium}
             onRemoveItem={handleRemoveCartItem}
             onContinueShopping={() => handleStartFlow()}
@@ -919,12 +1263,21 @@ export default function App() {
             authConfigured={auth.configured}
             authLoading={auth.loading}
             totals={totals}
-            premiumRetouch={premiumRetouchEnabled}
+            checkoutOptions={checkoutOptions}
+            printCopyFees={siteSettings}
+            complianceCheckFee={siteSettings.complianceCheckFee}
+            photoRetouchingFee={siteSettings.photoRetouchingFee}
             premiumRetouchFee={siteSettings.premiumRetouchFee}
             premiumRetouchRequired={premiumRetouchRequired}
+            onPhotoPackageChange={handlePhotoPackageChange}
+            onPrintCopiesChange={handlePrintCopiesChange}
+            onToggleComplianceCheck={handleComplianceCheckToggle}
+            onTogglePhotoRetouching={handlePhotoRetouchingToggle}
             onTogglePremium={handleTogglePremium}
+            onOpenPrivacy={openPrivacyPage}
+            onOpenTerms={openTermsPage}
             paymentState={paymentState}
-            canRetryVerification={Boolean(pendingPayment?.sessionId) && Boolean(auth.user)}
+            canRetryVerification={Boolean(pendingPayment?.sessionId)}
             onRetryVerification={retryPaymentVerification}
             onOpenAuth={() => openAuthDialog('signin', VIEWS.checkout)}
             backLabel={checkoutOrigin === VIEWS.result ? 'Back to result' : 'Back to cart'}
@@ -966,6 +1319,13 @@ export default function App() {
         );
       case VIEWS.admin:
         return <AdminView onSiteSettingsChange={setSiteSettings} />;
+      case VIEWS.about:
+        return (
+          <AboutView
+            onBackHome={() => flow.navigate(VIEWS.home)}
+            onStartFlow={handleStartFlow}
+          />
+        );
       case VIEWS.privacy:
         return (
           <LegalPageView
@@ -993,7 +1353,7 @@ export default function App() {
   };
 
   const shouldShowNavbar = flow.view !== VIEWS.admin;
-  const shouldShowFooter = [VIEWS.home, VIEWS.cart, VIEWS.dashboard, VIEWS.privacy, VIEWS.terms].includes(flow.view);
+  const shouldShowFooter = [VIEWS.home, VIEWS.cart, VIEWS.dashboard, VIEWS.about, VIEWS.privacy, VIEWS.terms].includes(flow.view);
   const mainClassName = shouldShowNavbar && flow.view !== VIEWS.home ? 'pt-[var(--app-nav-height)]' : '';
 
   return (
@@ -1006,6 +1366,7 @@ export default function App() {
           onNavigateHome={() => flow.navigate(VIEWS.home)}
           onStartFlow={() => handleStartFlow()}
           onScrollToSection={scrollToSection}
+          onOpenAbout={openAboutPage}
           onOpenCart={() => flow.navigate(VIEWS.cart)}
           onOpenDashboard={openDashboard}
           onLogin={() => openAuthDialog('signin', VIEWS.dashboard)}
@@ -1021,6 +1382,7 @@ export default function App() {
         <Footer
           onScrollToSection={scrollToSection}
           onOpenDashboard={openDashboard}
+          onOpenAbout={openAboutPage}
           onOpenPrivacy={openPrivacyPage}
           onOpenTerms={openTermsPage}
         />

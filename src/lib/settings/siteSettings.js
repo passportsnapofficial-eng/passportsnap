@@ -1,7 +1,13 @@
 import { DOCUMENT_TYPES } from '../../data/documentTypes.js';
 
 export const SITE_SETTINGS_CURRENCY = 'USD';
-export const DEFAULT_PREMIUM_RETOUCH_FEE = 7.99;
+export const DEFAULT_PREMIUM_RETOUCH_FEE = 5.99;
+export const DEFAULT_DIGITAL_PRINT_FEE = 3.0;
+export const DEFAULT_DIGITAL_PRINT_2_COPY_FEE = DEFAULT_DIGITAL_PRINT_FEE;
+export const DEFAULT_DIGITAL_PRINT_4_COPY_FEE = 3.0;
+export const DEFAULT_DIGITAL_PRINT_6_COPY_FEE = 6.0;
+export const DEFAULT_COMPLIANCE_CHECK_FEE = 3.99;
+export const DEFAULT_PHOTO_RETOUCHING_FEE = 2.99;
 export const DEFAULT_WATERMARK_TEXT = 'PASSPORTSNAP';
 
 function roundCurrency(value, fallback = 0) {
@@ -57,6 +63,12 @@ export function getDefaultSiteSettings(baseDocuments = DOCUMENT_TYPES) {
   return {
     currency: SITE_SETTINGS_CURRENCY,
     premiumRetouchFee: DEFAULT_PREMIUM_RETOUCH_FEE,
+    digitalPrintFee: DEFAULT_DIGITAL_PRINT_FEE,
+    digitalPrint2CopyFee: DEFAULT_DIGITAL_PRINT_2_COPY_FEE,
+    digitalPrint4CopyFee: DEFAULT_DIGITAL_PRINT_4_COPY_FEE,
+    digitalPrint6CopyFee: DEFAULT_DIGITAL_PRINT_6_COPY_FEE,
+    complianceCheckFee: DEFAULT_COMPLIANCE_CHECK_FEE,
+    photoRetouchingFee: DEFAULT_PHOTO_RETOUCHING_FEE,
     watermarkText: DEFAULT_WATERMARK_TEXT,
     watermarkEnabled: true,
     updatedAt: null,
@@ -72,6 +84,10 @@ export function getDefaultSiteSettings(baseDocuments = DOCUMENT_TYPES) {
 
 export function normalizeSiteSettings(rawSettings = {}, baseDocuments = DOCUMENT_TYPES) {
   const defaults = getDefaultSiteSettings(baseDocuments);
+  const legacyDigitalPrintFee = roundCurrency(
+    rawSettings.digitalPrintFee ?? rawSettings.digital_print_fee,
+    defaults.digitalPrintFee,
+  );
   const rawDocuments = Array.isArray(rawSettings.documents) ? rawSettings.documents : [];
   const rawById = new Map(
     rawDocuments
@@ -99,6 +115,21 @@ export function normalizeSiteSettings(rawSettings = {}, baseDocuments = DOCUMENT
   return {
     currency: SITE_SETTINGS_CURRENCY,
     premiumRetouchFee: roundCurrency(rawSettings.premiumRetouchFee ?? rawSettings.premium_retouch_fee, defaults.premiumRetouchFee),
+    digitalPrintFee: legacyDigitalPrintFee,
+    digitalPrint2CopyFee: roundCurrency(
+      rawSettings.digitalPrint2CopyFee ?? rawSettings.digital_print_2_copy_fee,
+      legacyDigitalPrintFee,
+    ),
+    digitalPrint4CopyFee: roundCurrency(
+      rawSettings.digitalPrint4CopyFee ?? rawSettings.digital_print_4_copy_fee,
+      defaults.digitalPrint4CopyFee,
+    ),
+    digitalPrint6CopyFee: roundCurrency(
+      rawSettings.digitalPrint6CopyFee ?? rawSettings.digital_print_6_copy_fee,
+      defaults.digitalPrint6CopyFee,
+    ),
+    complianceCheckFee: roundCurrency(rawSettings.complianceCheckFee ?? rawSettings.compliance_check_fee, defaults.complianceCheckFee),
+    photoRetouchingFee: roundCurrency(rawSettings.photoRetouchingFee ?? rawSettings.photo_retouching_fee, defaults.photoRetouchingFee),
     watermarkText: String(rawSettings.watermarkText ?? rawSettings.watermark_text ?? defaults.watermarkText).trim() || DEFAULT_WATERMARK_TEXT,
     watermarkEnabled: parseBoolean(rawSettings.watermarkEnabled ?? rawSettings.watermark_enabled, defaults.watermarkEnabled),
     updatedAt: normalizeTimestamp(rawSettings.updatedAt || rawSettings.updated_at),

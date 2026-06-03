@@ -1,14 +1,26 @@
 import { loadImageElement } from './cropUtils';
 
+export const DEFAULT_REVIEW_ADJUSTMENTS = {
+  scale: 1,
+  positionX: 0,
+  positionY: 0,
+};
+
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+export function normalizeReviewAdjustments(adjustments = {}) {
+  return {
+    scale: clamp(Number(adjustments.scale || adjustments.zoom || DEFAULT_REVIEW_ADJUSTMENTS.scale), 1, 1.8),
+    positionX: clamp(Number(adjustments.positionX || adjustments.offsetX || DEFAULT_REVIEW_ADJUSTMENTS.positionX), -1, 1),
+    positionY: clamp(Number(adjustments.positionY || adjustments.offsetY || DEFAULT_REVIEW_ADJUSTMENTS.positionY), -1, 1),
+  };
+}
+
 export function getReviewFrameLayout(imageWidth, imageHeight, targetAspectRatio, adjustments = {}) {
   const imageAspectRatio = imageWidth / imageHeight;
-  const scale = clamp(Number(adjustments.scale || adjustments.zoom || 1), 1, 1.8);
-  const positionX = clamp(Number(adjustments.positionX || adjustments.offsetX || 0), -1, 1);
-  const positionY = clamp(Number(adjustments.positionY || adjustments.offsetY || 0), -1, 1);
+  const { scale, positionX, positionY } = normalizeReviewAdjustments(adjustments);
   let baseWidthRatio = 1;
   let baseHeightRatio = 1;
 

@@ -2,6 +2,10 @@ import { canvasToBlob, loadImageElement } from './cropUtils';
 
 const DEFAULT_MODEL = 'remove_bg_api';
 const DEFAULT_ENDPOINT = '/api/remove-bg';
+const MAX_UPLOAD_DIMENSION = 2200;
+const TARGET_UPLOAD_BYTES = 3.5 * 1024 * 1024;
+const MIN_UPLOAD_QUALITY = 0.82;
+const INITIAL_UPLOAD_QUALITY = 0.94;
 
 async function compositePngOnWhite(pngBlob) {
   const dataUrl = await readBlobAsDataUrl(pngBlob);
@@ -42,17 +46,63 @@ async function createBackgroundRemovalUpload(source) {
     throw new Error('Could not prepare the image for background removal.');
   }
 
-  canvas.width = image.naturalWidth || image.width;
-  canvas.height = image.naturalHeight || image.height;
+  const sourceWidth = image.naturalWidth || image.width;
+  const sourceHeight = image.naturalHeight || image.height;
+  let scale = 1;
+
+  if (Math.max(sourceWidth, sourceHeight) > MAX_UPLOAD_DIMENSION) {
+    scale = MAX_UPLOAD_DIMENSION / Math.max(sourceWidth, sourceHeight);
+  }
+
+  canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+  canvas.height = Math.max(1, Math.round(sourceHeight * scale));
   context.fillStyle = '#ffffff';
   context.fillRect(0, 0, canvas.width, canvas.height);
   context.imageSmoothingEnabled = true;
   context.imageSmoothingQuality = 'high';
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
 
-  const blob = await canvasToBlob(canvas, 'image/png');
+  let blob = await canvasToBlob(canvas, 'image/jpeg', INITIAL_UPLOAD_QUALITY);
   if (!blob) {
     throw new Error('Could not prepare the image for background removal.');
+  }
+
+  let quality = INITIAL_UPLOAD_QUALITY;
+  while (blob.size > TARGET_UPLOAD_BYTES && quality > MIN_UPLOAD_QUALITY) {
+    quality = Math.max(MIN_UPLOAD_QUALITY, quality - 0.04);
+    const attempt = await canvasToBlob(canvas, 'image/jpeg', quality);
+    if (!attempt) {
+      break;
+    }
+    blob = attempt;
+  }
+
+  while (blob.size > TARGET_UPLOAD_BYTES && Math.max(canvas.width, canvas.height) > 1600) {
+    const nextCanvas = document.createElement('canvas');
+    const nextContext = nextCanvas.getContext('2d');
+    if (!nextContext) {
+      break;
+    }
+
+    nextCanvas.width = Math.max(1, Math.round(canvas.width * 0.88));
+    nextCanvas.height = Math.max(1, Math.round(canvas.height * 0.88));
+    nextContext.fillStyle = '#ffffff';
+    nextContext.fillRect(0, 0, nextCanvas.width, nextCanvas.height);
+    nextContext.imageSmoothingEnabled = true;
+    nextContext.imageSmoothingQuality = 'high';
+    nextContext.drawImage(canvas, 0, 0, nextCanvas.width, nextCanvas.height);
+
+    canvas.width = nextCanvas.width;
+    canvas.height = nextCanvas.height;
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(nextCanvas, 0, 0, canvas.width, canvas.height);
+
+    const attempt = await canvasToBlob(canvas, 'image/jpeg', quality);
+    if (!attempt) {
+      break;
+    }
+    blob = attempt;
   }
 
   return blob;

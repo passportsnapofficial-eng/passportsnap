@@ -22,10 +22,7 @@ html {
 
 body {
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top, var(--page-bg-top), transparent 24%),
-    radial-gradient(circle at right center, rgba(125, 211, 252, 0.22), transparent 22%),
-    linear-gradient(180deg, var(--page-bg-mid) 0%, #f7f9fc 46%, var(--page-bg-bottom) 100%);
+  background: #ffffff;
   color: #0f172a;
   font-family: Aptos, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -188,6 +185,10 @@ body {
 
   .workspace-footer {
     @apply mt-4 flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-end;
+  }
+
+  .workspace-footer + * {
+    @apply mt-4;
   }
 
   .image-container {

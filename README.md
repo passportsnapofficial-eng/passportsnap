@@ -1,16 +1,35 @@
-# React + Vite
+# PassportSnap
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+PassportSnap now supports an optional final-stage enhancement pass using [xinntao/Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN). The enhancer runs after the passport export is already framed and normalized, so the same polished image is used for the review preview, the downloadable JPG, and the order payload saved for checkout.
 
-Currently, two official plugins are available:
+If the enhancer is unavailable, the app silently keeps the current export instead of failing the photo flow.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Real-ESRGAN setup
 
-## React Compiler
+1. Create a Python environment on a PyTorch-supported Python version.
+2. Install the enhancer service dependencies:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+pip install -r services/image_enhancement/requirements.txt
+```
 
-## Expanding the ESLint configuration
+3. Start the enhancer:
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```bash
+npm run dev:image-enhancer
+```
+
+4. Run the app with the enhancer enabled:
+
+```bash
+npm run dev:full
+```
+
+The proxy expects the enhancer at `http://127.0.0.1:8788/enhance` by default. Override it with `REAL_ESRGAN_SERVICE_URL` if you host the model elsewhere.
+
+## Tuning
+
+- `VITE_IMAGE_ENHANCEMENT_MODEL` defaults to `realesr-general-x4v3`
+- `VITE_IMAGE_ENHANCEMENT_SCALE` defaults to `2`
+- `VITE_IMAGE_ENHANCEMENT_DENOISE` defaults to `0.5`
+- `VITE_IMAGE_ENHANCEMENT_ENABLED=false` disables the enhancement pass without removing the integration

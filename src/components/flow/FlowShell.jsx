@@ -17,6 +17,7 @@ export function FlowShell({
   onBack,
   backLabel = 'Back',
   chip,
+  showFlowStepper = true,
   summaryItems = [],
   compactHeader = false,
   children,
@@ -42,8 +43,7 @@ export function FlowShell({
                 </div>
               ) : null}
             </div>
-
-            <FlowStepper currentView={currentView} />
+            {showFlowStepper ? <FlowStepper currentView={currentView} /> : null}
 
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
               <div className="max-w-3xl">
