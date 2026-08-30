@@ -59,7 +59,7 @@ export function CartView({
         <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_21rem]">
           <div className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {visibleItems.map((item, index) => {
+              {visibleItems.map((item) => {
                 const cartIndex = cart.findIndex((cartItem) => cartItem.id === item.id);
                 return (
                   <article key={item.id} className="surface-card flex h-full flex-col p-4 animate-fade-up">
@@ -88,7 +88,6 @@ export function CartView({
                         <ProtectedPhotoPreview
                           src={item.photo}
                           alt={item.documentName}
-                          watermarkEnabled={Boolean(item.backgroundRemovalApplied)}
                           className="bg-white p-3"
                           imageClassName="rounded-[14px]"
                           aspectRatio={`${item.outputWidth || 4} / ${item.outputHeight || 5}`}

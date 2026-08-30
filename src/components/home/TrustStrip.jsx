@@ -48,17 +48,18 @@ export function TrustStrip() {
       <div className="mx-auto max-w-[1120px]">
         <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_8px_40px_-16px_rgba(15,23,42,0.12)]">
           <div className="grid divide-y divide-slate-100 sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-4 lg:divide-x lg:divide-y-0">
-            {STATS.map(({ icon: Icon, value, label, color, bg, border }) => (
-              <div key={label} className="flex flex-col items-center gap-3 px-6 py-8 sm:items-start">
+            {STATS.map(({ icon, value, label, color, bg, border }) => {
+              const StatIcon = icon;
+              return <div key={label} className="flex flex-col items-center gap-3 px-6 py-8 sm:items-start">
                 <div className={`inline-flex h-11 w-11 items-center justify-center rounded-2xl border ${bg} ${border}`}>
-                  <Icon className={`h-5 w-5 ${color}`} />
+                  <StatIcon className={`h-5 w-5 ${color}`} />
                 </div>
                 <div className="text-center sm:text-left">
                   <div className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">{value}</div>
                   <div className="mt-0.5 text-sm text-slate-500">{label}</div>
                 </div>
-              </div>
-            ))}
+              </div>;
+            })}
           </div>
 
           <div className="flex flex-col items-center justify-between gap-4 border-t border-slate-100 bg-slate-50/60 px-6 py-4 sm:flex-row">

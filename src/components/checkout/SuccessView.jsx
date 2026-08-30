@@ -166,7 +166,6 @@ function PreviewModal({ item, open, onClose }) {
             <ProtectedPhotoPreview
               src={item.fulfilledPhoto || item.photo}
               alt={`${item.documentName || 'Passport photo'} preview`}
-              watermarkEnabled={Boolean(item.backgroundRemovalApplied)}
               className="bg-white"
               aspectRatio={`${item.outputWidth || 600} / ${item.outputHeight || 600}`}
             />
@@ -175,19 +174,6 @@ function PreviewModal({ item, open, onClose }) {
       </div>
     </div>
   );
-}
-
-function resolveHeroDescription(order, emailDelivered) {
-  if (!order) return '';
-  if (order.guestCheckout) {
-    return emailDelivered
-      ? 'Your payment went through. Your passport photo is ready to download and was emailed to you.'
-      : 'Your payment went through. Your passport photo is ready to download.';
-  }
-
-  return emailDelivered
-    ? 'Your payment went through. Your passport photo is ready to download and saved to your dashboard.'
-    : 'Your payment went through. Your passport photo is ready to download and saved to your dashboard.';
 }
 
 function resolveResolutionLabel(item) {
@@ -427,7 +413,6 @@ export function SuccessView({ order, onDownload, onBackHome, onOpenDashboard }) 
                           <ProtectedPhotoPreview
                             src={processedPhoto}
                             alt={`${primaryItem?.documentName || 'Passport photo'} export`}
-                            watermarkEnabled={Boolean(primaryItem?.backgroundRemovalApplied)}
                             className="bg-white"
                             aspectRatio={`${primaryItem?.outputWidth || 600} / ${primaryItem?.outputHeight || 600}`}
                           />
@@ -526,7 +511,6 @@ export function SuccessView({ order, onDownload, onBackHome, onOpenDashboard }) 
                         <ProtectedPhotoPreview
                           src={processedPhoto}
                           alt={`${primaryItem?.documentName || 'Passport photo'} processed image`}
-                          watermarkEnabled={Boolean(primaryItem?.backgroundRemovalApplied)}
                           className="bg-white"
                           aspectRatio={`${primaryItem?.outputWidth || 600} / ${primaryItem?.outputHeight || 600}`}
                         />

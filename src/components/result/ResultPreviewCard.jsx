@@ -21,6 +21,11 @@ export function ResultPreviewCard({ result }) {
     { label: 'Document', value: result.documentName },
     { label: 'Output', value: result.sizeLabel },
     { label: 'Resolution', value: result.outputLabel },
+    { label: 'File', value: 'High-resolution JPG · no watermark' },
+    {
+      label: 'Headwear',
+      value: result.metadata?.analysis?.headwear?.label || 'Not detected',
+    },
     { label: 'Background', value: result.backgroundLabel },
     {
       label: 'Detected tone',
@@ -46,7 +51,6 @@ export function ResultPreviewCard({ result }) {
           <ProtectedPhotoPreview
             src={result.processedPhoto}
             alt="Processed passport photo preview"
-            watermarkEnabled={Boolean(result.backgroundRemovalApplied)}
             className="bg-white p-4"
             imageClassName="rounded-[20px]"
             aspectRatio={`${result.outputWidth || result.metadata?.outputWidth || 1} / ${

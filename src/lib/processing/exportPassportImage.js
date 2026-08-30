@@ -7,10 +7,9 @@ import {
   segmentPassportSubject,
 } from './mediapipeVision';
 import { runPassportValidationWorker } from './passportValidationWorkerClient';
+import { resolveHighResolutionExport } from './exportResolution';
+import { setJpegDpi } from './jpegDpi';
 
-// Delivered at 1200px (600 DPI for a 2x2in photo) so the final image keeps
-// detail from high-res uploads instead of being capped at the 600px minimum.
-const STANDARD_EXPORT_SIZE = 1200;
 const MIN_FILE_SIZE_BYTES = 54 * 1024;
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 const TARGET_HEAD_RATIO = 0.58;
@@ -49,7 +48,7 @@ function createBackgroundRemovalState(model) {
   };
 }
 
-function createImageEnhancementState(model, outscale, denoiseStrength) {
+function createImageEnhancementState(model, outscale, denoiseStrength, targetWidth, targetHeight) {
   return {
     attempted: false,
     applied: false,
@@ -57,8 +56,8 @@ function createImageEnhancementState(model, outscale, denoiseStrength) {
     model,
     outscale,
     denoiseStrength,
-    targetWidth: STANDARD_EXPORT_SIZE,
-    targetHeight: STANDARD_EXPORT_SIZE,
+    targetWidth,
+    targetHeight,
   };
 }
 
@@ -73,7 +72,8 @@ function normalizePositiveNumber(value, fallback) {
 
 function resolveEditingPolicy(validationPolicy = {}) {
   const requiresUnalteredPhoto = Boolean(validationPolicy?.requiresUnalteredPhoto);
-  const allowBackgroundCleanup = true;
+  const allowBackgroundCleanup =
+    !requiresUnalteredPhoto && validationPolicy?.allowBackgroundCleanup !== false;
 
   return {
     requiresUnalteredPhoto,
@@ -189,7 +189,7 @@ async function encodeDownloadBlob(canvas) {
   return blob;
 }
 
-async function normalizeDownloadExport(exported, options = {}) {
+async function normalizeDownloadExport(exported, preset, options = {}) {
   if (!isUsableImageSource(exported?.dataUrl)) {
     throw new Error('No finished photo was produced.');
   }
@@ -202,8 +202,9 @@ async function normalizeDownloadExport(exported, options = {}) {
     throw new Error('Could not prepare the final passport photo.');
   }
 
-  canvas.width = STANDARD_EXPORT_SIZE;
-  canvas.height = STANDARD_EXPORT_SIZE;
+  const highResolutionExport = resolveHighResolutionExport(preset);
+  canvas.width = highResolutionExport.width;
+  canvas.height = highResolutionExport.height;
   drawNormalizedPassportPhoto(
     context,
     processedImage,
@@ -220,6 +221,8 @@ async function normalizeDownloadExport(exported, options = {}) {
       options.imageEnhancementDenoiseStrength,
       DEFAULT_IMAGE_ENHANCEMENT_DENOISE_STRENGTH,
     ),
+    canvas.width,
+    canvas.height,
   );
 
   if (options.imageEnhancementEnabled !== false) {
@@ -268,24 +271,28 @@ async function normalizeDownloadExport(exported, options = {}) {
     }
   }
 
-  const blob = await encodeDownloadBlob(canvas);
+  const encodedBlob = await encodeDownloadBlob(canvas);
+  const blob = await setJpegDpi(encodedBlob, highResolutionExport.dpi);
   const dataUrl = await readBlobAsDataUrl(blob);
 
   return {
     ...exported,
     blob,
     dataUrl,
-    outputWidth: STANDARD_EXPORT_SIZE,
-    outputHeight: STANDARD_EXPORT_SIZE,
-    targetAspectRatio: 1,
+    outputWidth: canvas.width,
+    outputHeight: canvas.height,
+    outputDpi: highResolutionExport.dpi,
+    targetAspectRatio: canvas.width / canvas.height,
     enhancement: imageEnhancement,
     analysis: {
       ...exported.analysis,
       technical: {
         ...exported.analysis.technical,
-        outputWidth: STANDARD_EXPORT_SIZE,
-        outputHeight: STANDARD_EXPORT_SIZE,
-        outputAspectRatio: 1,
+        outputWidth: canvas.width,
+        outputHeight: canvas.height,
+        outputDpi: highResolutionExport.dpi,
+        minimumOutputDpi: 300,
+        outputAspectRatio: canvas.width / canvas.height,
         normalizedForDownload: true,
         imageEnhancementAttempted: Boolean(imageEnhancement.attempted),
         imageEnhanced: Boolean(imageEnhancement.applied),
@@ -335,7 +342,7 @@ async function validateAndExportImage({
     },
   );
 
-  return normalizeDownloadExport(exported, {
+  return normalizeDownloadExport(exported, preset, {
     reportStage,
     ...imageEnhancementOptions,
   });
@@ -357,7 +364,7 @@ export async function exportPassportImage(source, preset, options = {}) {
     import.meta.env.VITE_BACKGROUND_REMOVAL_MODEL ||
     REMOVE_BG_MODEL;
   const imageEnhancementEnabled = options.imageEnhancementEnabled ?? (
-    import.meta.env.VITE_IMAGE_ENHANCEMENT_ENABLED !== 'false'
+    import.meta.env.VITE_IMAGE_ENHANCEMENT_ENABLED === 'true'
   );
   const imageEnhancementOptions = {
     imageEnhancementEnabled,

@@ -1,5 +1,6 @@
 import { projectFaceDetectionToCrop } from '../lib/processing/faceDetection';
 import { classifyEyewearFromCanvas } from '../lib/processing/eyewearClassifierRuntime';
+import { resolveHighResolutionExport } from '../lib/processing/exportResolution';
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -996,6 +997,248 @@ function analyzeRectRegion(imageData, grayscale, width, height, rect, thresholds
   };
 }
 
+function analyzeHeadwearRegion(
+  imageData,
+  grayscale,
+  width,
+  height,
+  foregroundMask,
+  rect,
+  referenceColor,
+) {
+  const bounds = getRectBounds(rect, width, height);
+  const summary = createSummary();
+  const data = imageData.data;
+  let foregroundPixels = 0;
+  let differentColorPixels = 0;
+  let colorDistanceSum = 0;
+  const totalPixels = bounds.width * bounds.height;
+
+  for (let y = bounds.y; y < bounds.y + bounds.height; y += 1) {
+    for (let x = bounds.x; x < bounds.x + bounds.width; x += 1) {
+      const pixelOffset = y * width + x;
+      if (foregroundMask?.data && !foregroundMask.data[pixelOffset]) {
+        continue;
+      }
+
+      const dataOffset = pixelOffset * 4;
+      const red = data[dataOffset];
+      const green = data[dataOffset + 1];
+      const blue = data[dataOffset + 2];
+      const colorDistance = Math.hypot(
+        red - referenceColor.red,
+        green - referenceColor.green,
+        blue - referenceColor.blue,
+      );
+
+      foregroundPixels += 1;
+      colorDistanceSum += colorDistance;
+      if (colorDistance >= 58) {
+        differentColorPixels += 1;
+      }
+      updateSummary(summary, red, green, blue);
+    }
+  }
+
+  const finalized = finalizeSummary(summary);
+  return {
+    ...finalized,
+    bounds,
+    foregroundRatio: totalPixels ? foregroundPixels / totalPixels : 0,
+    nonSkinColorRatio: foregroundPixels ? differentColorPixels / foregroundPixels : 0,
+    meanColorDistance: foregroundPixels ? colorDistanceSum / foregroundPixels : 0,
+    edgeDensity: computeEdgeDensity(
+      grayscale,
+      width,
+      height,
+      (x, y) =>
+        x >= bounds.x &&
+        x < bounds.x + bounds.width &&
+        y >= bounds.y &&
+        y < bounds.y + bounds.height &&
+        (!foregroundMask?.data || Boolean(foregroundMask.data[y * width + x])),
+    ),
+  };
+}
+
+function buildHeadwearAnalysis(
+  imageData,
+  grayscale,
+  width,
+  height,
+  foregroundMask,
+  primaryFace,
+) {
+  if (!primaryFace || !foregroundMask?.data) {
+    return {
+      supported: false,
+      detectedType: 'unknown',
+      label: 'Head covering detection unavailable',
+      hatDetected: false,
+      hijabDetected: false,
+      possibleHeadCovering: false,
+      confidence: 0,
+      hatScore: 0,
+      hijabScore: 0,
+    };
+  }
+
+  const faceBox = primaryFace.boundingBox;
+  const points = Array.isArray(primaryFace.landmarks) ? primaryFace.landmarks : [];
+  const forehead = getPoint(points, 10);
+  const chin = getPoint(points, 152);
+  const faceReference = getRectSummary(imageData, width, height, {
+    x: faceBox.x + faceBox.width * 0.23,
+    y: faceBox.y + faceBox.height * 0.28,
+    width: faceBox.width * 0.54,
+    height: faceBox.height * 0.48,
+  });
+  const referenceColor = {
+    red: faceReference.meanRed,
+    green: faceReference.meanGreen,
+    blue: faceReference.meanBlue,
+  };
+  const topY = Math.max(0, faceBox.y - faceBox.height * 0.34);
+  const topRegion = analyzeHeadwearRegion(
+    imageData,
+    grayscale,
+    width,
+    height,
+    foregroundMask,
+    {
+      x: faceBox.x - faceBox.width * 0.2,
+      y: topY,
+      width: faceBox.width * 1.4,
+      height: Math.max(forehead.y + faceBox.height * 0.06 - topY, faceBox.height * 0.2),
+    },
+    referenceColor,
+  );
+  const leftRegion = analyzeHeadwearRegion(
+    imageData,
+    grayscale,
+    width,
+    height,
+    foregroundMask,
+    {
+      x: faceBox.x - faceBox.width * 0.24,
+      y: faceBox.y + faceBox.height * 0.15,
+      width: faceBox.width * 0.34,
+      height: faceBox.height * 0.82,
+    },
+    referenceColor,
+  );
+  const rightRegion = analyzeHeadwearRegion(
+    imageData,
+    grayscale,
+    width,
+    height,
+    foregroundMask,
+    {
+      x: faceBox.x + faceBox.width * 0.9,
+      y: faceBox.y + faceBox.height * 0.15,
+      width: faceBox.width * 0.34,
+      height: faceBox.height * 0.82,
+    },
+    referenceColor,
+  );
+  const lowerRegion = analyzeHeadwearRegion(
+    imageData,
+    grayscale,
+    width,
+    height,
+    foregroundMask,
+    {
+      x: faceBox.x - faceBox.width * 0.08,
+      y: chin.y - faceBox.height * 0.02,
+      width: faceBox.width * 1.16,
+      height: faceBox.height * 0.28,
+    },
+    referenceColor,
+  );
+
+  const sideCoverage = (leftRegion.foregroundRatio + rightRegion.foregroundRatio) / 2;
+  const sideNonSkinRatio = (leftRegion.nonSkinColorRatio + rightRegion.nonSkinColorRatio) / 2;
+  const sideBalance = 1 - clamp(
+    Math.abs(leftRegion.foregroundRatio - rightRegion.foregroundRatio) / 0.5,
+    0,
+    1,
+  );
+  const sideColorDistance = Math.hypot(
+    leftRegion.meanRed - rightRegion.meanRed,
+    leftRegion.meanGreen - rightRegion.meanGreen,
+    leftRegion.meanBlue - rightRegion.meanBlue,
+  );
+  const sideColorSimilarity = 1 - clamp(sideColorDistance / 120, 0, 1);
+  const hijabScore =
+    clamp(sideCoverage / 0.78, 0, 1) * 0.26 +
+    clamp(sideNonSkinRatio / 0.78, 0, 1) * 0.24 +
+    clamp(lowerRegion.nonSkinColorRatio / 0.75, 0, 1) * 0.2 +
+    clamp(lowerRegion.foregroundRatio / 0.72, 0, 1) * 0.12 +
+    sideBalance * 0.1 +
+    sideColorSimilarity * 0.08;
+  const hatScore =
+    clamp(topRegion.foregroundRatio / 0.72, 0, 1) * 0.34 +
+    clamp(topRegion.nonSkinColorRatio / 0.8, 0, 1) * 0.28 +
+    clamp(topRegion.meanColorDistance / 105, 0, 1) * 0.18 +
+    clamp(topRegion.edgeDensity / 0.18, 0, 1) * 0.12 +
+    (1 - clamp(sideCoverage / 0.82, 0, 1)) * 0.08;
+  const hijabDetected =
+    hijabScore >= 0.78 &&
+    leftRegion.foregroundRatio >= 0.55 &&
+    rightRegion.foregroundRatio >= 0.55 &&
+    sideNonSkinRatio >= 0.58 &&
+    lowerRegion.foregroundRatio >= 0.5 &&
+    lowerRegion.nonSkinColorRatio >= 0.52;
+  const hatDetected =
+    !hijabDetected &&
+    hatScore >= 0.86 &&
+    topRegion.foregroundRatio >= 0.62 &&
+    topRegion.nonSkinColorRatio >= 0.7;
+  const strongHijabPattern =
+    hijabScore >= 0.74 &&
+    sideCoverage >= 0.62 &&
+    sideNonSkinRatio >= 0.62 &&
+    lowerRegion.foregroundRatio >= 0.52;
+  const strongHatPattern =
+    hatScore >= 0.82 &&
+    topRegion.foregroundRatio >= 0.66 &&
+    topRegion.nonSkinColorRatio >= 0.74;
+  const possibleHeadCovering =
+    !hatDetected && !hijabDetected && (strongHijabPattern || strongHatPattern);
+  const detectedType = hijabDetected
+    ? 'hijab'
+    : hatDetected
+      ? 'hat'
+      : possibleHeadCovering
+        ? 'possible_head_covering'
+        : 'none';
+  const label = hijabDetected
+    ? 'Hijab or religious head covering detected'
+    : hatDetected
+      ? 'Hat detected'
+      : possibleHeadCovering
+        ? 'Possible head covering detected'
+        : 'No hat or hijab detected';
+
+  return {
+    supported: true,
+    detectedType,
+    label,
+    hatDetected,
+    hijabDetected,
+    possibleHeadCovering,
+    confidence: Math.max(hatScore, hijabScore),
+    hatScore,
+    hijabScore,
+    topForegroundRatio: topRegion.foregroundRatio,
+    topNonSkinColorRatio: topRegion.nonSkinColorRatio,
+    sideForegroundRatio: sideCoverage,
+    sideNonSkinColorRatio: sideNonSkinRatio,
+    lowerForegroundRatio: lowerRegion.foregroundRatio,
+    lowerNonSkinColorRatio: lowerRegion.nonSkinColorRatio,
+  };
+}
+
 function buildHeuristicEyewearAnalysis(imageData, grayscale, width, height, primaryFace) {
   if (!primaryFace) {
     return {
@@ -1224,7 +1467,7 @@ async function buildEyewearAnalysis(analysisCanvas, imageData, grayscale, width,
   };
 }
 
-function buildRejectionReasons(projectedFaceDetection, lighting, background, sharpness, eyewear) {
+function buildRejectionReasons(projectedFaceDetection, lighting, background, sharpness, eyewear, headwear) {
   const reasons = [];
   const seen = new Set();
   const primaryFace = projectedFaceDetection?.primaryFace || null;
@@ -1306,6 +1549,10 @@ function buildRejectionReasons(projectedFaceDetection, lighting, background, sha
 
   if (eyewear?.supported && eyewear.wearingGlasses) {
     pushReason('Remove glasses');
+  }
+
+  if (headwear?.supported && headwear.hatDetected) {
+    pushReason('Remove hat');
   }
 
   if (background) {
@@ -1470,12 +1717,21 @@ export async function validatePassportPhotoPayload(payload, options = {}) {
     analysisHeight,
     primaryFace,
   );
+  const headwear = buildHeadwearAnalysis(
+    analysisImageData,
+    grayscale,
+    analysisWidth,
+    analysisHeight,
+    foregroundMask,
+    primaryFace,
+  );
   const rejectionReasons = buildRejectionReasons(
     projectedFaceDetection,
     lighting,
     background,
     null,
     eyewear,
+    headwear,
   );
 
   postStage('detect-blur', { requestId, onStageChange });
@@ -1529,17 +1785,15 @@ export async function validatePassportPhotoPayload(payload, options = {}) {
     background,
     sharpness,
     eyewear,
+    headwear,
   );
 
   postStage('build-canvas', { requestId, onStageChange });
-  // Render the delivered photo at a higher pixel density than the spec size so
-  // detail from the high-res source survives. The spec dimensions
-  // (preset.outputWidth/Height) still drive aspect ratio and source-resolution
-  // validation; only the delivered pixels are denser (600px @ 300 DPI spec ->
-  // 1200px @ 600 DPI delivered for the US 2x2in photo).
-  const EXPORT_RESOLUTION_SCALE = 2;
-  const exportWidth = Math.round(preset.outputWidth * EXPORT_RESOLUTION_SCALE);
-  const exportHeight = Math.round(preset.outputHeight * EXPORT_RESOLUTION_SCALE);
+  // Keep the document's physical dimensions and aspect ratio while delivering
+  // twice the usual 300-DPI pixel density.
+  const highResolutionExport = resolveHighResolutionExport(preset);
+  const exportWidth = highResolutionExport.width;
+  const exportHeight = highResolutionExport.height;
   const exportCanvas = createCanvas(exportWidth, exportHeight);
   const exportContext = exportCanvas.getContext('2d');
 
@@ -1586,6 +1840,7 @@ export async function validatePassportPhotoPayload(payload, options = {}) {
         segmentationError: segmentation?.error || null,
       },
       eyewear,
+      headwear,
       lighting,
       sharpness,
       backgroundRemoval: {
@@ -1621,6 +1876,7 @@ export async function validatePassportPhotoPayload(payload, options = {}) {
         sourceHeight,
         outputWidth: exportWidth,
         outputHeight: exportHeight,
+        outputDpi: highResolutionExport.dpi,
         outputAspectRatio: preset.outputWidth / preset.outputHeight,
       },
     },

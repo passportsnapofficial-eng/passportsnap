@@ -70,7 +70,7 @@ export function getDefaultSiteSettings(baseDocuments = DOCUMENT_TYPES) {
     complianceCheckFee: DEFAULT_COMPLIANCE_CHECK_FEE,
     photoRetouchingFee: DEFAULT_PHOTO_RETOUCHING_FEE,
     watermarkText: DEFAULT_WATERMARK_TEXT,
-    watermarkEnabled: true,
+    watermarkEnabled: false,
     updatedAt: null,
     documents: baseDocuments.map((document, index) => ({
       documentId: document.id,
@@ -131,7 +131,9 @@ export function normalizeSiteSettings(rawSettings = {}, baseDocuments = DOCUMENT
     complianceCheckFee: roundCurrency(rawSettings.complianceCheckFee ?? rawSettings.compliance_check_fee, defaults.complianceCheckFee),
     photoRetouchingFee: roundCurrency(rawSettings.photoRetouchingFee ?? rawSettings.photo_retouching_fee, defaults.photoRetouchingFee),
     watermarkText: String(rawSettings.watermarkText ?? rawSettings.watermark_text ?? defaults.watermarkText).trim() || DEFAULT_WATERMARK_TEXT,
-    watermarkEnabled: parseBoolean(rawSettings.watermarkEnabled ?? rawSettings.watermark_enabled, defaults.watermarkEnabled),
+    // Finished and preview images are always watermark-free. Keep this field in
+    // the settings payload for backward compatibility with stored admin data.
+    watermarkEnabled: false,
     updatedAt: normalizeTimestamp(rawSettings.updatedAt || rawSettings.updated_at),
     documents: documents.sort((left, right) => left.displayOrder - right.displayOrder || left.documentId.localeCompare(right.documentId)),
   };

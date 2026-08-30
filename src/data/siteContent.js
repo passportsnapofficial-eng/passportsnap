@@ -1,8 +1,8 @@
 export const HERO_BADGES = [
   'Official sizing',
   'DoS-guided checks',
-  'Instant Download',
-  'Privacy First',
+  '600 DPI JPG',
+  'Hat & hijab check',
 ];
 
 export const TRUST_STRIP_POINTS = [
@@ -14,7 +14,7 @@ export const TRUST_STRIP_POINTS = [
 export const FEATURE_CARDS = [
   { title: 'Done in minutes', body: 'Take your photo at home, no studio, no waiting.' },
   { title: 'Smart formatting', body: 'Crop, align, and size your photo without changing your appearance.' },
-  { title: 'Compliance ready', body: 'Formatted to meet passport standards from the start.' },
+  { title: 'High-resolution download', body: 'Receive a watermark-free JPG with embedded 600 DPI resolution.' },
 ];
 
 export const HOW_IT_WORKS_STEPS = [
@@ -41,6 +41,7 @@ export const SELFIE_TIPS = [
   'Face centered in frame',
   'Look straight ahead',
   'Plain background preferred',
+  'Remove hats; religious head coverings are checked separately',
 ];
 
 export const COMPARISON_ROWS = [
@@ -62,6 +63,7 @@ export const CONSISTENCY_PROMISE_POINTS = [
 
 export const FOOTER_LINKS = {
   services: [
+    { id: 'features', label: 'Features' },
     { id: 'how-it-works', label: 'How It Works' },
     { id: 'documents', label: 'Supported Documents' },
     { id: 'comparison', label: 'Why PassportSnap' },

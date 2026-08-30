@@ -73,6 +73,12 @@ export function ReviewView({
         'Keep your head straight and centered',
         'Use softer light and a plain background',
       ];
+  const outputDpi = Number(result.metadata?.outputDpi || result.metadata?.analysis?.technical?.outputDpi || 0);
+  const verificationItems = [
+    outputDpi >= 300 ? `${outputDpi} DPI high-resolution JPG` : 'High-resolution JPG prepared',
+    result.metadata?.analysis?.headwear?.label || 'Hat and hijab check completed',
+    'Watermark-free output',
+  ];
 
   return (
     <FlowShell
@@ -195,7 +201,6 @@ export function ReviewView({
               <ProtectedPhotoPreview
                 src={result.processedPhoto}
                 alt="Finished passport photo"
-                watermarkEnabled={Boolean(result.backgroundRemovalApplied)}
                 className="h-full w-full"
               />
             </div>
@@ -203,6 +208,20 @@ export function ReviewView({
         </section>
 
         <aside className="space-y-4">
+          <div className="surface-card p-5 sm:p-6">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <CheckCircle2 className="h-4 w-4 text-blue-600" />
+              File and headwear checks
+            </div>
+            <div className="mt-4 space-y-3">
+              {verificationItems.map((item) => (
+                <div key={item} className="rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm leading-6 text-slate-700">
+                  {item}
+                </div>
+              ))}
+            </div>
+          </div>
+
           {!copy.canCheckout ? (
             <div className="surface-card attention-card p-5 sm:p-6">
               <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">

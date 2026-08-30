@@ -397,11 +397,12 @@ function SectionHeading({ title, subtitle }) {
   );
 }
 
-function EmptyState({ icon: Icon = Search, title, body }) {
+function EmptyState({ icon = Search, title, body }) {
+  const EmptyIcon = icon;
   return (
     <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center">
       <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm">
-        <Icon className="h-5 w-5 text-slate-400" />
+        <EmptyIcon className="h-5 w-5 text-slate-400" />
       </div>
       <div>
         <div className="text-sm font-semibold text-slate-800">{title}</div>
@@ -1584,22 +1585,23 @@ export function AdminView({ onSiteSettingsChange = null }) {
         <nav className="hidden xl:flex xl:w-60 xl:shrink-0 xl:flex-col xl:border-r xl:border-slate-200 xl:bg-white">
           <div className="flex-1 space-y-0.5 px-3 py-5">
             <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Navigation</p>
-            {TABS.map(({ id, label, icon: Icon }) => (
-              <button key={id} type="button" onClick={() => setActiveTab(id)}
+            {TABS.map(({ id, label, icon }) => {
+              const TabIcon = icon;
+              return <button key={id} type="button" onClick={() => setActiveTab(id)}
                 className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
                   activeTab === id
                     ? 'bg-blue-50 text-blue-700 shadow-[inset_0_0_0_1px_rgba(37,99,235,0.12)]'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                 }`}>
-                <Icon className={`h-4 w-4 shrink-0 ${activeTab === id ? 'text-blue-600' : 'text-slate-400'}`} />
+                <TabIcon className={`h-4 w-4 shrink-0 ${activeTab === id ? 'text-blue-600' : 'text-slate-400'}`} />
                 {label}
                 {id === 'queue' && metrics.queuedReviewCount > 0 ? (
                   <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-100 px-1 text-[11px] font-bold text-amber-700">
                     {metrics.queuedReviewCount}
                   </span>
                 ) : null}
-              </button>
-            ))}
+              </button>;
+            })}
           </div>
           <div className="border-t border-slate-100 px-4 py-4">
             <p className="text-[11px] text-slate-400">Signed in as admin</p>
@@ -1671,12 +1673,13 @@ export function AdminView({ onSiteSettingsChange = null }) {
       {/* Mobile bottom tab bar */}
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white xl:hidden">
         <div className="flex">
-          {TABS.map(({ id, label, icon: Icon }) => (
-            <button key={id} type="button" onClick={() => setActiveTab(id)}
+          {TABS.map(({ id, label, icon }) => {
+            const TabIcon = icon;
+            return <button key={id} type="button" onClick={() => setActiveTab(id)}
               className={`relative flex flex-1 flex-col items-center gap-1 py-3 text-[10px] font-semibold transition ${
                 activeTab === id ? 'text-blue-600' : 'text-slate-400'
               }`}>
-              <Icon className="h-5 w-5" />
+              <TabIcon className="h-5 w-5" />
               {label}
               {activeTab === id && (
                 <span className="absolute bottom-0 left-1/2 h-0.5 w-8 -translate-x-1/2 rounded-full bg-blue-600" />
@@ -1686,8 +1689,8 @@ export function AdminView({ onSiteSettingsChange = null }) {
                   {metrics.queuedReviewCount}
                 </span>
               ) : null}
-            </button>
-          ))}
+            </button>;
+          })}
         </div>
       </nav>
     </div>

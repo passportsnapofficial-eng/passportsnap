@@ -6,11 +6,12 @@
  */
 import { chromium } from 'playwright';
 import { resolve } from 'node:path';
-import { writeFileSync, statSync } from 'node:fs';
+import { mkdirSync, writeFileSync, statSync } from 'node:fs';
 
 const APP = process.env.APP_URL || 'http://127.0.0.1:8790';
 const FIX = resolve('public', 'test-fixtures', process.env.FIXTURE || 'WhatsApp Image 2026-04-07 at 11.06.38 PM.jpeg');
 const OUT = resolve('.codex-logs', 'e2e');
+mkdirSync(OUT, { recursive: true });
 
 const browser = await chromium.launch({
   headless: true,

@@ -11,7 +11,7 @@ const CARD_FEATURES = [
   'Compliance check',
 ];
 
-export function HeroSection({ onStart, onUpload }) {
+export function HeroSection({ onStart }) {
   return (
     <section className="relative overflow-hidden pt-[var(--app-nav-height)]">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-10%,rgba(219,234,254,0.6),transparent)]" />
@@ -33,8 +33,8 @@ export function HeroSection({ onStart, onUpload }) {
           </h1>
 
           <p className="mt-5 max-w-lg text-base leading-8 text-slate-600 sm:text-lg">
-            Take a selfie, then get a correctly sized passport photo with guided crop,
-            background, and compliance checks.
+            Take a selfie, run automatic hat and hijab checks, then download a
+            watermark-free 600 DPI passport JPG.
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">

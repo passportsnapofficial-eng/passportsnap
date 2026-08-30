@@ -178,6 +178,7 @@ const FRIENDLY_REJECTION_REASON_OVERRIDES = {
   eyesVisible: 'Eyes are not clear enough',
   eyesLevel: 'Eyes not level',
   eyewearFree: 'Remove glasses',
+  hatFree: 'Remove hat',
   neutralExpression: 'Keep a neutral expression',
   mouthClosed: 'Keep your mouth closed',
   backgroundPlain: 'Background is too busy',
@@ -260,6 +261,7 @@ export function buildComplianceChecks(processed, preset, documentType = null) {
   const faceDetection = processed.analysis.faceDetection;
   const background = processed.analysis.background;
   const eyewear = processed.analysis.eyewear || {};
+  const headwear = processed.analysis.headwear || {};
   const lighting = processed.analysis.lighting;
   const sharpness = processed.analysis.sharpness;
   const framing = processed.analysis.framing;
@@ -337,6 +339,38 @@ export function buildComplianceChecks(processed, preset, documentType = null) {
     (faceSharpnessEdgeDensity >= 0.018 || portraitSharpnessEdgeDensity >= 0.024);
   const acceptedBackgroundLabel = formatToneList(allowedBackgroundTones);
   const checks = [];
+
+  checks.push(
+    headwear.supported
+      ? createPassedCheck(
+          'Headwear',
+          'hatFree',
+          'No hat detected',
+          'Hat detected',
+          !headwear.hatDetected,
+          'Remove hats, caps, and fashion headwear. Religious head coverings may remain when the full face is visible.',
+        )
+      : createInfoCheck(
+          'Headwear',
+          'hatFree',
+          'Hat detection unavailable',
+          'The headwear detector could not confidently inspect this photo. Check it manually before submission.',
+        ),
+    createInfoCheck(
+      'Headwear',
+      'hijabDetection',
+      headwear.hijabDetected
+        ? 'Hijab or religious head covering detected'
+        : headwear.possibleHeadCovering
+          ? 'Possible head covering detected'
+          : 'No hijab detected',
+      headwear.hijabDetected
+        ? 'Religious head coverings are treated separately from hats. Keep the full face visible from the bottom of the chin to the top of the forehead.'
+        : headwear.possibleHeadCovering
+          ? 'Please confirm whether this is religious headwear or a hat; the automated result is intentionally conservative.'
+          : 'No religious head covering was identified by the automated check.',
+    ),
+  );
 
   checks.push(
     createPassedCheck(
@@ -646,6 +680,14 @@ export function buildComplianceChecks(processed, preset, documentType = null) {
       'Incorrect export dimensions',
       outputDimensionsAccepted,
       'Try another source photo if the final passport download cannot be rebuilt cleanly.',
+    ),
+    createPassedCheck(
+      'Image Technicals',
+      'outputDpi',
+      `High-resolution ${Number(processed.analysis?.technical?.outputDpi || 0)} DPI export`,
+      'Export density below 300 DPI',
+      Number(processed.analysis?.technical?.outputDpi || 0) >= 300,
+      'Rebuild the download so its embedded resolution metadata is at least 300 DPI.',
     ),
   );
 

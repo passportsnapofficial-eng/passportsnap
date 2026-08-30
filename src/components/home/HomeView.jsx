@@ -1,5 +1,6 @@
 import { ComparisonSection } from './ComparisonSection';
 import { DocumentPreviewSection } from './DocumentPreviewSection';
+import { FeatureCardsSection } from './FeatureCardsSection';
 import { FinalCTA } from './FinalCTA';
 import { HeroSection } from './HeroSection';
 import { HowItWorks } from './HowItWorks';
@@ -14,6 +15,7 @@ export function HomeView({ onStartFlow }) {
         onUpload={() => onStartFlow('upload')}
       />
       <TrustStrip />
+      <FeatureCardsSection onStart={() => onStartFlow('camera')} />
       <DocumentPreviewSection />
       <HowItWorks />
       <SelfieGuide onStart={() => onStartFlow('camera')} />

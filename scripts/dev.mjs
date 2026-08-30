@@ -8,6 +8,10 @@ const viteBin = resolve(rootDir, 'node_modules', 'vite', 'bin', 'vite.js');
 const apiServerEntry = resolve(rootDir, 'server', 'appServer.mjs');
 const shouldRunLegacyAiService = process.argv.includes('--with-legacy-ai');
 const shouldRunImageEnhancer = process.argv.includes('--with-image-enhancer');
+const childEnvironment = {
+  ...process.env,
+  ...(shouldRunImageEnhancer ? { VITE_IMAGE_ENHANCEMENT_ENABLED: 'true' } : {}),
+};
 const apiWatchTargets = [
   resolve(rootDir, 'server'),
   resolve(rootDir, 'src', 'lib', 'admin'),
@@ -37,7 +41,7 @@ function spawnChild(args) {
   return spawn(process.execPath, args, {
     cwd: rootDir,
     stdio: 'inherit',
-    env: process.env,
+    env: childEnvironment,
   });
 }
 

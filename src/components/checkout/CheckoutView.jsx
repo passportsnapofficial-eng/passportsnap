@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   AlertCircle,
   ArrowLeft,
@@ -186,7 +186,6 @@ function SelectedPhotoStrip({ item, total, showTotal = true }) {
           <ProtectedPhotoPreview
             src={item.photo}
             alt={item.documentName}
-            watermarkEnabled={Boolean(item.backgroundRemovalApplied)}
             className="h-full rounded-[16px] bg-white"
             imageClassName="rounded-[16px]"
             aspectRatio={`${item.outputWidth || 1} / ${item.outputHeight || 1}`}
@@ -532,7 +531,6 @@ function StickySummary({ item, cart, totals }) {
               <ProtectedPhotoPreview
                 src={item.photo}
                 alt={item.documentName}
-                watermarkEnabled={Boolean(item.backgroundRemovalApplied)}
                 className="h-full rounded-[16px] bg-white"
                 imageClassName="rounded-[16px]"
                 aspectRatio={`${item.outputWidth || 1} / ${item.outputHeight || 1}`}
@@ -575,7 +573,6 @@ export function CheckoutView({
   paymentState,
   canRetryVerification,
   onRetryVerification,
-  onOpenAuth,
   onBack,
   backLabel = 'Back',
   onSubmit,
@@ -590,6 +587,7 @@ export function CheckoutView({
 }) {
   const isSignedIn = Boolean(user);
   const [step, setStep] = useState(1);
+  const activeStep = isVerifying || isSuccess || isError ? 3 : step;
   const [customer, setCustomer] = useState({
     firstName: user?.name?.split(' ')?.[0] || '',
     lastName: user?.name?.split(' ')?.slice(1).join(' ') || '',
@@ -642,12 +640,6 @@ export function CheckoutView({
 
     return points;
   }, [authConfigured, checkoutOptions.printCopies, isSignedIn, manualFulfillmentRequired, requiresPhysicalDeliveryAddress]);
-
-  useEffect(() => {
-    if (isVerifying || isSuccess || isError) {
-      setStep(3);
-    }
-  }, [isError, isSuccess, isVerifying]);
 
   function handleFieldChange(field, value) {
     setCustomer((current) => ({ ...current, [field]: value }));
@@ -744,8 +736,8 @@ export function CheckoutView({
       currentView={VIEWS.checkout}
       title="Checkout"
       description="Choose the package, add optional services, then continue to secure Stripe checkout."
-      onBack={step === 1 ? onBack : () => setStep((current) => current - 1)}
-      backLabel={step === 1 ? backLabel : 'Back'}
+      onBack={activeStep === 1 ? onBack : () => setStep((current) => current - 1)}
+      backLabel={activeStep === 1 ? backLabel : 'Back'}
       chip={null}
       showFlowStepper={false}
       compactHeader
@@ -765,16 +757,16 @@ export function CheckoutView({
         <input type="hidden" name="country" value={customer.country} />
 
         <div className="space-y-3">
-          <TopStepper currentStep={isVerifying ? 3 : step} />
-          <MobileStepper currentStep={isVerifying ? 3 : step} />
+          <TopStepper currentStep={activeStep} />
+          <MobileStepper currentStep={activeStep} />
 
           {isVerifying ? (
             <PaymentVerificationSkeleton message={paymentState?.message} />
           ) : (
-          <div className={step === 3 ? 'grid gap-4 xl:grid-cols-[minmax(0,1fr)_304px] xl:items-start' : ''}>
+          <div className={activeStep === 3 ? 'grid gap-4 xl:grid-cols-[minmax(0,1fr)_304px] xl:items-start' : ''}>
             <div className="space-y-3">
 
-              {step === 1 ? (
+              {activeStep === 1 ? (
                 <section className="surface-card animate-fade-up p-4 sm:p-5">
                   <div className="mb-4 sm:hidden">
                     <SelectedPhotoStrip item={primaryItem} total={totals.total} />
@@ -859,7 +851,7 @@ export function CheckoutView({
                 </section>
               ) : null}
 
-              {step === 2 ? (
+              {activeStep === 2 ? (
                 <section className="surface-card animate-fade-up p-4 sm:p-5">
                   <SectionIntro
                     icon={<Sparkles className="h-5 w-5" />}
@@ -944,7 +936,7 @@ export function CheckoutView({
                 </section>
               ) : null}
 
-              {step === 3 ? (
+              {activeStep === 3 ? (
                 <section className="surface-card animate-fade-up p-4 sm:p-5">
                   <SectionIntro
                     icon={<Mail className="h-5 w-5" />}
@@ -1231,7 +1223,7 @@ export function CheckoutView({
               ) : null}
             </div>
 
-            {step === 3 ? (
+            {activeStep === 3 ? (
               <div>
                 <StickySummary item={primaryItem} cart={cart} totals={totals} />
               </div>
