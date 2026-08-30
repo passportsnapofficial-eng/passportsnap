@@ -33,8 +33,8 @@ export function HeroSection({ onStart }) {
           </h1>
 
           <p className="mt-5 max-w-lg text-base leading-8 text-slate-600 sm:text-lg">
-            Take a selfie, run automatic hat and hijab checks, then download a
-            watermark-free 600 DPI passport JPG.
+            Take a selfie, then get a correctly sized passport photo with guided crop,
+            background, and compliance checks.
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
