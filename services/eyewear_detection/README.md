@@ -1,6 +1,6 @@
 # Eyewear Detection Training
 
-This repo currently ships a browser-side passport validator. The existing glasses check was originally heuristic. The runtime now supports an optional learned classifier at:
+This repo currently ships a browser-side passport validator. The existing glasses check was originally heuristic. The runtime supports an optional learned classifier configured with `VITE_EYEWEAR_CLASSIFIER_MODEL_PATH`. The conventional public path is:
 
 `public/models/eyewear_classifier.tflite`
 
@@ -81,6 +81,10 @@ The exported TFLite model is expected at:
 Copy it into:
 
 - `public/models/eyewear_classifier.tflite`
+
+Then set `VITE_EYEWEAR_CLASSIFIER_MODEL_PATH=/models/eyewear_classifier.tflite`
+for the environments that ship the model. When it is unset, the app uses the
+high-precision browser heuristic without issuing a missing-model request.
 
 ## Accuracy target
 

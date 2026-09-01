@@ -12,9 +12,6 @@ import { setJpegDpi } from './jpegDpi';
 
 const MIN_FILE_SIZE_BYTES = 54 * 1024;
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
-const TARGET_HEAD_RATIO = 0.58;
-const MIN_HEAD_RATIO = 0.49;
-const MAX_HEAD_RATIO = 0.69;
 const REMOVE_BG_MODEL = 'remove_bg_api';
 const DEFAULT_IMAGE_ENHANCEMENT_MODEL = 'realesr-general-x4v3';
 const DEFAULT_IMAGE_ENHANCEMENT_OUTSCALE = 2;
@@ -119,27 +116,19 @@ function applyMicroTexture(context, width, height, pass = 1) {
   context.putImageData(imageData, 0, 0);
 }
 
-function drawNormalizedPassportPhoto(context, image, headRatio = 0) {
+function drawPreparedPassportPhoto(context, image) {
   const canvasWidth = context.canvas.width;
   const canvasHeight = context.canvas.height;
-  const fitScale = Math.min(canvasWidth / image.width, canvasHeight / image.height);
-  let headScale = 1;
-
-  if (headRatio > 0) {
-    const normalizedHeadRatio = clamp(headRatio, MIN_HEAD_RATIO, MAX_HEAD_RATIO);
-    headScale = clamp(TARGET_HEAD_RATIO / normalizedHeadRatio, 0.82, 1.28);
-  }
-
-  const drawWidth = image.width * fitScale * headScale;
-  const drawHeight = image.height * fitScale * headScale;
-  const drawX = (canvasWidth - drawWidth) / 2;
-  const drawY = (canvasHeight - drawHeight) / 2;
 
   context.fillStyle = '#ffffff';
   context.fillRect(0, 0, canvasWidth, canvasHeight);
   context.imageSmoothingEnabled = true;
   context.imageSmoothingQuality = 'high';
-  context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+  // The validation worker has already rendered the approved guided crop at the
+  // target aspect ratio. This pass only converts that prepared image to the
+  // final JPEG dimensions; applying the detected head ratio again would zoom
+  // and crop the face a second time.
+  context.drawImage(image, 0, 0, canvasWidth, canvasHeight);
 }
 
 async function encodeDownloadBlob(canvas) {
@@ -205,11 +194,7 @@ async function normalizeDownloadExport(exported, preset, options = {}) {
   const highResolutionExport = resolveHighResolutionExport(preset);
   canvas.width = highResolutionExport.width;
   canvas.height = highResolutionExport.height;
-  drawNormalizedPassportPhoto(
-    context,
-    processedImage,
-    Number(exported.analysis?.framing?.headRatio || 0),
-  );
+  drawPreparedPassportPhoto(context, processedImage);
 
   let imageEnhancement = createImageEnhancementState(
     options.imageEnhancementModel || DEFAULT_IMAGE_ENHANCEMENT_MODEL,

@@ -302,15 +302,21 @@ export function buildComplianceChecks(processed, preset, documentType = null) {
     processed.backgroundRemoval?.attempted || processed.analysis?.backgroundRemoval?.attempted,
   );
   const backgroundAdvisoryOnly = allowBackgroundCleanup && (backgroundRemovalAttempted || backgroundRemovalApplied);
+  const eyewearClassifierReady = Boolean(eyewear.classifierReady);
   const highConfidenceEyewear =
     Boolean(eyewear.wearingGlasses) &&
     (
-      Number(eyewear.mlEyewearScore || 0) >= 0.92 ||
-      Number(eyewear.heuristicEyewearScore || eyewear.eyewearScore || 0) >= 0.9 ||
-      Number(eyewear.glareRatio || 0) >= 0.12 ||
+      Boolean(eyewear.heuristicHighConfidence) ||
       (
-        Number(eyewear.bridgeDarkRatio || 0) >= 0.24 &&
-        Number(eyewear.templeDarkRatio || 0) >= 0.24
+        eyewearClassifierReady &&
+        (
+          Number(eyewear.mlEyewearScore || 0) >= 0.92 ||
+          (
+            Number(eyewear.mlEyewearScore || 0) >= 0.84 &&
+            Number(eyewear.classifierMargin || 0) >= 0.18 &&
+            Number(eyewear.heuristicEyewearScore || eyewear.eyewearScore || 0) >= 0.68
+          )
+        )
       )
     );
   const portraitSharpnessVariance = Number(sharpness?.portraitLaplacianVariance || 0);

@@ -13,6 +13,7 @@ import {
   upsertAdminReviewRequest,
 } from '../src/lib/admin/adminServerCore.js';
 import {
+  isBackgroundRemovalConfigured,
   proxyBackgroundRemovalRequest,
   readRawRequestBody,
 } from '../src/lib/backgroundRemoval/backgroundRemovalServerCore.js';
@@ -386,6 +387,11 @@ const server = createServer(async (request, response) => {
         'X-Background-Feather-Ratio': result.featherRatio,
       }, requestOrigin);
       response.end(result.bodyBuffer);
+      return;
+    }
+
+    if (request.method === 'GET' && requestUrl.pathname === '/api/remove-bg') {
+      sendJson(response, 200, { configured: isBackgroundRemovalConfigured() }, requestOrigin);
       return;
     }
 

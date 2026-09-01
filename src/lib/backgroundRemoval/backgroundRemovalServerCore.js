@@ -69,6 +69,10 @@ function getRemoveBgApiKey() {
   return normalizeTrimmedString(process.env.REMOVE_BG_API_KEY || process.env.REMOVEBG_API_KEY);
 }
 
+export function isBackgroundRemovalConfigured() {
+  return Boolean(getRemoveBgApiKey());
+}
+
 export function getBackgroundRemovalProxyTimeoutMs() {
   const raw = Number(process.env.BACKGROUND_REMOVAL_TIMEOUT_MS || DEFAULT_TIMEOUT_MS);
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TIMEOUT_MS;

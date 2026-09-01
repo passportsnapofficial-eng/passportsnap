@@ -1,4 +1,5 @@
 import {
+  isBackgroundRemovalConfigured,
   proxyBackgroundRemovalRequest,
   readRawRequestBody,
 } from '../src/lib/backgroundRemoval/backgroundRemovalServerCore.js';
@@ -11,10 +12,15 @@ export const config = {
 };
 
 export default async function handler(request, response) {
-  setApiHeaders(response, request, 'POST,OPTIONS');
+  setApiHeaders(response, request, 'GET,POST,OPTIONS');
 
   if (request.method === 'OPTIONS') {
     response.status(204).end();
+    return;
+  }
+
+  if (request.method === 'GET') {
+    response.status(200).json({ configured: isBackgroundRemovalConfigured() });
     return;
   }
 

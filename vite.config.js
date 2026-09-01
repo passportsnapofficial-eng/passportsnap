@@ -78,6 +78,9 @@ export default defineConfig(({ mode }) => {
       host: devHost,
       port: 5173,
       strictPort: true,
+      watch: {
+        ignored: ['**/.codex-logs/**'],
+      },
       hmr: {
         host: hmrHost,
         clientPort: Number(env.VITE_HMR_PORT || 5173),

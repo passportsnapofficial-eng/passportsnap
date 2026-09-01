@@ -4,8 +4,9 @@ import {
 } from '@mediapipe/tasks-vision';
 
 const WASM_BASE_PATH = '/mediapipe/wasm';
-const DEFAULT_MODEL_PATH =
-  import.meta.env.VITE_EYEWEAR_CLASSIFIER_MODEL_PATH || '/models/eyewear_classifier.tflite';
+const DEFAULT_MODEL_PATH = String(
+  import.meta.env.VITE_EYEWEAR_CLASSIFIER_MODEL_PATH || '',
+).trim();
 const FACE_EXPANSION_RATIO = 0.22;
 const FACE_CROP_SIZE = 224;
 
@@ -50,13 +51,21 @@ function isNegativeLabel(label) {
 }
 
 async function createEyewearClassifier() {
+  if (!DEFAULT_MODEL_PATH) {
+    return null;
+  }
+
   const response = await fetch(DEFAULT_MODEL_PATH);
   if (!response.ok) {
     return null;
   }
 
   const modelBuffer = new Uint8Array(await response.arrayBuffer());
-  if (!modelBuffer.byteLength) {
+  const hasTfliteSignature =
+    modelBuffer.byteLength >= 8 &&
+    String.fromCharCode(...modelBuffer.slice(4, 8)) === 'TFL3';
+
+  if (!hasTfliteSignature) {
     return null;
   }
 

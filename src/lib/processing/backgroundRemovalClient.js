@@ -6,6 +6,27 @@ const MAX_UPLOAD_DIMENSION = 2200;
 const TARGET_UPLOAD_BYTES = 3.5 * 1024 * 1024;
 const MIN_UPLOAD_QUALITY = 0.82;
 const INITIAL_UPLOAD_QUALITY = 0.94;
+const availabilityRequests = new Map();
+
+async function isRemoteBackgroundRemovalAvailable(endpoint) {
+  if (!availabilityRequests.has(endpoint)) {
+    availabilityRequests.set(endpoint, fetch(endpoint, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          return true;
+        }
+
+        const payload = await response.json();
+        return payload?.configured !== false;
+      })
+      .catch(() => true));
+  }
+
+  return availabilityRequests.get(endpoint);
+}
 
 async function compositePngOnWhite(pngBlob) {
   const dataUrl = await readBlobAsDataUrl(pngBlob);
@@ -133,6 +154,11 @@ export async function removeBackgroundForPassportExport(source, options = {}) {
 
   const model = String(options.model || DEFAULT_MODEL).trim() || DEFAULT_MODEL;
   const endpoint = String(options.endpoint || DEFAULT_ENDPOINT).trim() || DEFAULT_ENDPOINT;
+
+  if (!(await isRemoteBackgroundRemovalAvailable(endpoint))) {
+    throw new Error('Remote background removal is not configured.');
+  }
+
   const uploadBlob = await createBackgroundRemovalUpload(source);
   const formData = new FormData();
 

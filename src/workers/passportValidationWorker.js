@@ -1113,6 +1113,34 @@ function buildHeadwearAnalysis(
     },
     referenceColor,
   );
+  const leftTopOverhang = analyzeHeadwearRegion(
+    imageData,
+    grayscale,
+    width,
+    height,
+    foregroundMask,
+    {
+      x: faceBox.x - faceBox.width * 0.34,
+      y: topY,
+      width: faceBox.width * 0.36,
+      height: Math.max(forehead.y + faceBox.height * 0.04 - topY, faceBox.height * 0.18),
+    },
+    referenceColor,
+  );
+  const rightTopOverhang = analyzeHeadwearRegion(
+    imageData,
+    grayscale,
+    width,
+    height,
+    foregroundMask,
+    {
+      x: faceBox.x + faceBox.width * 0.98,
+      y: topY,
+      width: faceBox.width * 0.36,
+      height: Math.max(forehead.y + faceBox.height * 0.04 - topY, faceBox.height * 0.18),
+    },
+    referenceColor,
+  );
   const leftRegion = analyzeHeadwearRegion(
     imageData,
     grayscale,
@@ -1169,6 +1197,22 @@ function buildHeadwearAnalysis(
     leftRegion.meanBlue - rightRegion.meanBlue,
   );
   const sideColorSimilarity = 1 - clamp(sideColorDistance / 120, 0, 1);
+  const topOverhangCoverage =
+    (leftTopOverhang.foregroundRatio + rightTopOverhang.foregroundRatio) / 2;
+  const minimumTopOverhangCoverage = Math.min(
+    leftTopOverhang.foregroundRatio,
+    rightTopOverhang.foregroundRatio,
+  );
+  const topOverhangNonSkinRatio =
+    (leftTopOverhang.nonSkinColorRatio + rightTopOverhang.nonSkinColorRatio) / 2;
+  // Hair commonly fills the region directly above the forehead. A confident
+  // hat decision additionally needs foreground extending beyond both sides of
+  // the facial outline, which is characteristic of a brim or structured cap.
+  const structuredHatOverhang =
+    topOverhangCoverage >= 0.5 &&
+    topOverhangCoverage <= 0.86 &&
+    minimumTopOverhangCoverage >= 0.47 &&
+    topOverhangNonSkinRatio >= 0.68;
   const hijabScore =
     clamp(sideCoverage / 0.78, 0, 1) * 0.26 +
     clamp(sideNonSkinRatio / 0.78, 0, 1) * 0.24 +
@@ -1177,34 +1221,46 @@ function buildHeadwearAnalysis(
     sideBalance * 0.1 +
     sideColorSimilarity * 0.08;
   const hatScore =
-    clamp(topRegion.foregroundRatio / 0.72, 0, 1) * 0.34 +
-    clamp(topRegion.nonSkinColorRatio / 0.8, 0, 1) * 0.28 +
-    clamp(topRegion.meanColorDistance / 105, 0, 1) * 0.18 +
-    clamp(topRegion.edgeDensity / 0.18, 0, 1) * 0.12 +
-    (1 - clamp(sideCoverage / 0.82, 0, 1)) * 0.08;
-  const hijabDetected =
-    hijabScore >= 0.78 &&
-    leftRegion.foregroundRatio >= 0.55 &&
-    rightRegion.foregroundRatio >= 0.55 &&
-    sideNonSkinRatio >= 0.58 &&
-    lowerRegion.foregroundRatio >= 0.5 &&
-    lowerRegion.nonSkinColorRatio >= 0.52;
+    clamp(topRegion.foregroundRatio / 0.72, 0, 1) * 0.24 +
+    clamp(topRegion.nonSkinColorRatio / 0.8, 0, 1) * 0.2 +
+    clamp(topRegion.meanColorDistance / 105, 0, 1) * 0.14 +
+    clamp(topRegion.edgeDensity / 0.18, 0, 1) * 0.1 +
+    clamp(topOverhangCoverage / 0.42, 0, 1) * 0.2 +
+    clamp(topOverhangNonSkinRatio / 0.8, 0, 1) * 0.12;
   const hatDetected =
-    !hijabDetected &&
-    hatScore >= 0.86 &&
-    topRegion.foregroundRatio >= 0.62 &&
-    topRegion.nonSkinColorRatio >= 0.7;
+    structuredHatOverhang &&
+    hatScore >= 0.84 &&
+    topRegion.foregroundRatio >= 0.64 &&
+    topRegion.nonSkinColorRatio >= 0.72;
+  const hijabDetected =
+    !hatDetected &&
+    hijabScore >= 0.72 &&
+    topOverhangCoverage <= 0.24 &&
+    sideCoverage >= 0.44 &&
+    sideNonSkinRatio >= 0.68 &&
+    lowerRegion.foregroundRatio >= 0.72 &&
+    lowerRegion.nonSkinColorRatio >= 0.82;
   const strongHijabPattern =
     hijabScore >= 0.74 &&
     sideCoverage >= 0.62 &&
     sideNonSkinRatio >= 0.62 &&
     lowerRegion.foregroundRatio >= 0.52;
   const strongHatPattern =
-    hatScore >= 0.82 &&
+    hatScore >= 0.78 &&
     topRegion.foregroundRatio >= 0.66 &&
     topRegion.nonSkinColorRatio >= 0.74;
+  const possibleHijabPattern =
+    strongHijabPattern &&
+    topOverhangCoverage <= 0.18 &&
+    sideNonSkinRatio >= 0.78 &&
+    lowerRegion.nonSkinColorRatio >= 0.8;
+  const possibleHatPattern =
+    strongHatPattern &&
+    topOverhangCoverage >= 0.48 &&
+    topOverhangCoverage <= 0.86 &&
+    minimumTopOverhangCoverage >= 0.47;
   const possibleHeadCovering =
-    !hatDetected && !hijabDetected && (strongHijabPattern || strongHatPattern);
+    !hatDetected && !hijabDetected && (possibleHijabPattern || possibleHatPattern);
   const detectedType = hijabDetected
     ? 'hijab'
     : hatDetected
@@ -1232,6 +1288,10 @@ function buildHeadwearAnalysis(
     hijabScore,
     topForegroundRatio: topRegion.foregroundRatio,
     topNonSkinColorRatio: topRegion.nonSkinColorRatio,
+    topOverhangCoverage,
+    minimumTopOverhangCoverage,
+    topOverhangNonSkinRatio,
+    structuredHatOverhang,
     sideForegroundRatio: sideCoverage,
     sideNonSkinColorRatio: sideNonSkinRatio,
     lowerForegroundRatio: lowerRegion.foregroundRatio,
@@ -1244,6 +1304,7 @@ function buildHeuristicEyewearAnalysis(imageData, grayscale, width, height, prim
     return {
       supported: false,
       wearingGlasses: false,
+      heuristicHighConfidence: false,
       eyewearScore: 0,
       eyeBandDarkRatio: 0,
       eyeBandEdgeDensity: 0,
@@ -1330,38 +1391,6 @@ function buildHeuristicEyewearAnalysis(imageData, grayscale, width, height, prim
   const templeEdgeDensity = (leftTempleRegion.edgeDensity + rightTempleRegion.edgeDensity) / 2;
   const glareRatio = Math.max(eyeBand.highlightRatio, leftEye.highlightRatio, rightEye.highlightRatio);
   const eyeContrast = Math.max(leftEye.contrast, rightEye.contrast, eyeBand.contrast);
-  const likelyFrames =
-    eyeBand.dynamicDarkRatio >= 0.13 &&
-    Math.max(leftEye.edgeDensity, rightEye.edgeDensity) >= 0.09 &&
-    eyeBand.edgeDensity >= 0.09;
-  const likelyBridge =
-    bridge.dynamicDarkRatio >= 0.13 ||
-    (bridge.edgeDensity >= 0.12 && bridge.contrast >= 34);
-  const likelyTemples =
-    templeDarkRatio >= 0.15 ||
-    (templeEdgeDensity >= 0.16 && eyeBand.dynamicDarkRatio >= 0.14);
-  const likelyDarkFrames =
-    eyeBand.dynamicDarkRatio >= 0.17 &&
-    (bridge.dynamicDarkRatio >= 0.13 || templeDarkRatio >= 0.14);
-  const likelyGlare =
-    glareRatio >= 0.06 &&
-    eyeBand.edgeDensity >= 0.08 &&
-    (bridge.edgeDensity >= 0.06 || bridge.contrast >= 28);
-  const likelyThinFrames =
-    bridge.edgeDensity >= 0.14 &&
-    glareRatio >= 0.045 &&
-    averageEyeEdgeDensity >= 0.18;
-  const likelyTempleArms =
-    templeEdgeDensity >= 0.16 &&
-    (bridge.dynamicDarkRatio >= 0.2 || eyeBand.dynamicDarkRatio >= 0.14);
-  const likelyTintedLenses =
-    bridge.dynamicDarkRatio >= 0.2 &&
-    eyeToFaceLuminanceRatio <= 0.82 &&
-    (
-      averageEyeDarkRatio >= 0.12 ||
-      templeEdgeDensity >= 0.14 ||
-      eyeBand.dynamicDarkRatio >= 0.12
-    );
   const eyewearScore =
     clamp(eyeBand.dynamicDarkRatio / 0.14, 0, 1) * 0.22 +
     clamp(bridge.dynamicDarkRatio / 0.12, 0, 1) * 0.18 +
@@ -1370,20 +1399,35 @@ function buildHeuristicEyewearAnalysis(imageData, grayscale, width, height, prim
     clamp(glareRatio / 0.08, 0, 1) * 0.2 +
     clamp(bridge.edgeDensity / 0.1, 0, 1) * 0.08 +
     clamp(templeEdgeDensity / 0.1, 0, 1) * 0.06;
-  const wearingGlasses =
-    (likelyFrames && (likelyBridge || likelyTemples || likelyGlare)) ||
-    (likelyBridge && likelyTemples) ||
-    (likelyGlare && (likelyBridge || likelyTemples)) ||
-    (likelyThinFrames && likelyBridge) ||
-    (likelyTempleArms && likelyBridge) ||
-    likelyTintedLenses ||
-    likelyDarkFrames ||
-    (eyeContrast >= 60 && likelyGlare && bridge.edgeDensity >= 0.06) ||
-    eyewearScore >= 0.84;
+  // Only promote the heuristic to a detected-glasses result when several
+  // independent frame signals agree. The continuous score remains useful for
+  // the optional learned classifier, but on its own it commonly mistakes
+  // eyebrows, hair and high-contrast lighting for glasses.
+  const structuredLowGlareFrames =
+    bridge.dynamicDarkRatio >= 0.32 &&
+    templeDarkRatio >= 0.3 &&
+    bridge.edgeDensity >= 0.24 &&
+    eyeBand.edgeDensity >= 0.24 &&
+    glareRatio <= 0.04;
+  const lowResolutionDarkFrames =
+    bridge.dynamicDarkRatio >= 0.155 &&
+    templeEdgeDensity >= 0.12 &&
+    averageEyeEdgeDensity <= 0.04 &&
+    eyeToFaceLuminanceRatio <= 0.82;
+  const reflectiveThinFrames =
+    bridge.edgeDensity >= 0.1 &&
+    bridge.dynamicDarkRatio <= 0.02 &&
+    glareRatio >= 0.018 &&
+    glareRatio <= 0.04 &&
+    eyeToFaceLuminanceRatio <= 0.9;
+  const heuristicHighConfidence =
+    structuredLowGlareFrames || lowResolutionDarkFrames || reflectiveThinFrames;
+  const wearingGlasses = heuristicHighConfidence;
 
   return {
     supported: true,
     wearingGlasses,
+    heuristicHighConfidence,
     eyewearScore,
     eyeBandDarkRatio: eyeBand.dynamicDarkRatio,
     eyeBandEdgeDensity: eyeBand.edgeDensity,

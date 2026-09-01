@@ -587,7 +587,6 @@ export function CheckoutView({
 }) {
   const isSignedIn = Boolean(user);
   const [step, setStep] = useState(1);
-  const activeStep = isVerifying || isSuccess || isError ? 3 : step;
   const [customer, setCustomer] = useState({
     firstName: user?.name?.split(' ')?.[0] || '',
     lastName: user?.name?.split(' ')?.slice(1).join(' ') || '',
@@ -607,6 +606,7 @@ export function CheckoutView({
   const isVerifying = paymentState?.status === 'verifying';
   const isSuccess = paymentState?.status === 'success';
   const isError = paymentState?.status === 'error';
+  const activeStep = isVerifying || isSuccess || isError ? 3 : step;
   const manualFulfillmentRequired =
     checkoutOptions.complianceCheck || checkoutOptions.photoRetouching || checkoutOptions.premiumRetouch;
   const requiresPhysicalDeliveryAddress = checkoutOptions.photoPackage === PHOTO_PACKAGE_TYPES.digitalPrints;
