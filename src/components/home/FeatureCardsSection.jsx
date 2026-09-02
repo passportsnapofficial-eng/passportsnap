@@ -93,8 +93,8 @@ const FEATURE_GROUPS = [
     items: [
       {
         icon: Download,
-        title: '600 DPI, watermark-free JPG',
-        body: 'Receive a high-resolution JPEG with embedded 600 DPI metadata and the correct document aspect ratio.',
+        title: '300 DPI, watermark-free JPG',
+        body: 'Receive a high-resolution JPEG with embedded 300 DPI metadata and the correct document aspect ratio.',
       },
       {
         icon: CheckCircle2,

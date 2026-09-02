@@ -1833,8 +1833,7 @@ export async function validatePassportPhotoPayload(payload, options = {}) {
   );
 
   postStage('build-canvas', { requestId, onStageChange });
-  // Keep the document's physical dimensions and aspect ratio while delivering
-  // twice the usual 300-DPI pixel density.
+  // Keep the document's physical dimensions, aspect ratio, and 300-DPI pixel density.
   const highResolutionExport = resolveHighResolutionExport(preset);
   const exportWidth = highResolutionExport.width;
   const exportHeight = highResolutionExport.height;

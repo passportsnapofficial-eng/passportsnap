@@ -2,10 +2,6 @@ function mmToPixels(mm) {
   return Math.round((mm / 25.4) * 300);
 }
 
-function mmToDeliveryPixels(mm) {
-  return mmToPixels(mm) * 2;
-}
-
 export const COUNTRY_FORMATS = [
   {
     id: 'us-passport',
@@ -141,7 +137,7 @@ export const COUNTRY_FORMATS = [
     },
     rules: [
       { label: 'Official size', value: '50 x 70 mm' },
-      { label: 'Export size', value: `${mmToDeliveryPixels(50)} x ${mmToDeliveryPixels(70)} px JPG at 600 DPI` },
+      { label: 'Export size', value: `${mmToPixels(50)} x ${mmToPixels(70)} px JPG at 300 DPI` },
       { label: 'Background', value: 'Plain white or light-coloured' },
       { label: 'Face height', value: '31 to 36 mm from chin to crown' },
     ],
@@ -188,7 +184,7 @@ export const COUNTRY_FORMATS = [
     },
     rules: [
       { label: 'Official size', value: '35 x 45 mm' },
-      { label: 'Export size', value: `${mmToDeliveryPixels(35)} x ${mmToDeliveryPixels(45)} px JPG at 600 DPI` },
+      { label: 'Export size', value: `${mmToPixels(35)} x ${mmToPixels(45)} px JPG at 300 DPI` },
       { label: 'Background', value: 'Plain light-coloured background' },
       { label: 'Head size', value: '29 to 34 mm from crown to chin' },
     ],
@@ -235,7 +231,7 @@ export const COUNTRY_FORMATS = [
     },
     rules: [
       { label: 'Official size', value: '35 x 45 mm' },
-      { label: 'Export size', value: `${mmToDeliveryPixels(35)} x ${mmToDeliveryPixels(45)} px JPG at 600 DPI` },
+      { label: 'Export size', value: `${mmToPixels(35)} x ${mmToPixels(45)} px JPG at 300 DPI` },
       { label: 'Background', value: 'Light background' },
       { label: 'Visibility', value: 'Full face, one person only' },
     ],
@@ -282,7 +278,7 @@ export const COUNTRY_FORMATS = [
     },
     rules: [
       { label: 'Official size', value: '4.5 x 3.5 cm' },
-      { label: 'Export size', value: `${mmToDeliveryPixels(35)} x ${mmToDeliveryPixels(45)} px JPG at 600 DPI` },
+      { label: 'Export size', value: `${mmToPixels(35)} x ${mmToPixels(45)} px JPG at 300 DPI` },
       { label: 'Background', value: 'White or light background' },
       { label: 'Use case', value: 'Standard passport-size photo on Passport Seva paper guidance' },
     ],
@@ -329,7 +325,7 @@ export const COUNTRY_FORMATS = [
     },
     rules: [
       { label: 'Official size', value: '45 x 35 mm on the visa form' },
-      { label: 'Export size', value: `${mmToDeliveryPixels(35)} x ${mmToDeliveryPixels(45)} px JPG at 600 DPI` },
+      { label: 'Export size', value: `${mmToPixels(35)} x ${mmToPixels(45)} px JPG at 300 DPI` },
       { label: 'Orientation', value: 'Portrait photo, face forward' },
       { label: 'Background', value: 'Plain background with clear visibility' },
     ],
@@ -376,7 +372,7 @@ export const COUNTRY_FORMATS = [
     },
     rules: [
       { label: 'Official size', value: '48 x 33 mm' },
-      { label: 'Export size', value: `${mmToDeliveryPixels(33)} x ${mmToDeliveryPixels(48)} px JPG at 600 DPI` },
+      { label: 'Export size', value: `${mmToPixels(33)} x ${mmToPixels(48)} px JPG at 300 DPI` },
       { label: 'Background', value: 'White or close to white' },
       { label: 'Head size', value: '28 to 33 mm high and 15 to 22 mm wide' },
     ],

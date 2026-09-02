@@ -1,7 +1,7 @@
 export const HERO_BADGES = [
   'Official sizing',
   'DoS-guided checks',
-  '600 DPI JPG',
+  '300 DPI JPG',
   'Hat & hijab check',
 ];
 
@@ -14,7 +14,7 @@ export const TRUST_STRIP_POINTS = [
 export const FEATURE_CARDS = [
   { title: 'Done in minutes', body: 'Take your photo at home, no studio, no waiting.' },
   { title: 'Smart formatting', body: 'Crop, align, and size your photo without changing your appearance.' },
-  { title: 'High-resolution download', body: 'Receive a watermark-free JPG with embedded 600 DPI resolution.' },
+  { title: 'High-resolution download', body: 'Receive a watermark-free JPG with embedded 300 DPI resolution.' },
 ];
 
 export const HOW_IT_WORKS_STEPS = [
