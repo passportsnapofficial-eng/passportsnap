@@ -16,6 +16,7 @@ function normalizeItems(items = []) {
     sourcePhoto: item.sourcePhoto || '',
     outputWidth: item.outputWidth,
     outputHeight: item.outputHeight,
+    outputDpi: Number(item.outputDpi || 0),
     statusLabel: item.statusLabel,
     backgroundRemovalApplied: Boolean(item.backgroundRemovalApplied),
     premiumRetouch: Boolean(item.premiumRetouch),

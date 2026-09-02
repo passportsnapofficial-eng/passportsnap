@@ -1,4 +1,4 @@
-export const MIN_EXPORT_DPI = 300;
+export const MIN_EXPORT_DPI = 600;
 export const HIGH_RES_EXPORT_DPI = 600;
 
 function normalizePositiveNumber(value, fallback) {

@@ -1,5 +1,6 @@
 import { ArrowRight, CheckCircle2, Loader2, RefreshCcw, Sparkles } from 'lucide-react';
 import { CAPTURE_MODES, VIEWS } from '../../lib/utils/constants';
+import { HIGH_RES_EXPORT_DPI } from '../../lib/processing/exportResolution';
 import { FlowShell } from '../flow/FlowShell';
 import { FlagMark } from '../shared/FlagMark';
 import { ProtectedPhotoPreview } from '../shared/ProtectedPhotoPreview';
@@ -75,7 +76,9 @@ export function ReviewView({
       ];
   const outputDpi = Number(result.metadata?.outputDpi || result.metadata?.analysis?.technical?.outputDpi || 0);
   const verificationItems = [
-    outputDpi >= 300 ? `${outputDpi} DPI high-resolution JPG` : 'High-resolution JPG prepared',
+    outputDpi >= HIGH_RES_EXPORT_DPI
+      ? `${outputDpi} DPI high-resolution JPG`
+      : `${HIGH_RES_EXPORT_DPI} DPI export required`,
     result.metadata?.analysis?.headwear?.label || 'Hat and hijab check completed',
     'Watermark-free output',
   ];

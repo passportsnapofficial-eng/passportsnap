@@ -1137,6 +1137,7 @@ export default function App() {
       sourcePhoto: flow.result.sourcePhoto || '',
       outputWidth: flow.result.outputWidth,
       outputHeight: flow.result.outputHeight,
+      outputDpi: Number(flow.result.metadata?.outputDpi || flow.result.outputDpi || 0),
       statusLabel: flow.result.headline || flow.result.status,
       backgroundRemovalApplied: Boolean(flow.result.backgroundRemovalApplied),
       requiresPremiumRetouch: Boolean(flow.result.requiresPremiumRetouch),

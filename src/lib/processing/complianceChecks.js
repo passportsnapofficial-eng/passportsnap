@@ -1,4 +1,5 @@
 import { CHECK_STATUSES, RESULT_STATUSES } from '../utils/constants';
+import { HIGH_RES_EXPORT_DPI } from './exportResolution';
 
 function resolveCheckLabel(labels, status) {
   if (typeof labels === 'string') {
@@ -691,9 +692,9 @@ export function buildComplianceChecks(processed, preset, documentType = null) {
       'Image Technicals',
       'outputDpi',
       `High-resolution ${Number(processed.analysis?.technical?.outputDpi || 0)} DPI export`,
-      'Export density below 300 DPI',
-      Number(processed.analysis?.technical?.outputDpi || 0) >= 300,
-      'Rebuild the download so its embedded resolution metadata is at least 300 DPI.',
+      `Export density below ${HIGH_RES_EXPORT_DPI} DPI`,
+      Number(processed.analysis?.technical?.outputDpi || 0) >= HIGH_RES_EXPORT_DPI,
+      `Rebuild the download so its embedded resolution metadata is at least ${HIGH_RES_EXPORT_DPI} DPI.`,
     ),
   );
 

@@ -178,8 +178,10 @@ function PreviewModal({ item, open, onClose }) {
 
 function resolveResolutionLabel(item) {
   const width = Number(item?.outputWidth || 0);
-  if (!width) return 'JPG export';
-  return `${width} px JPG`;
+  const height = Number(item?.outputHeight || 0);
+  const dpi = Number(item?.outputDpi || 0);
+  if (!width) return dpi ? `${dpi} DPI JPG` : 'JPG export';
+  return `${width}${height ? ` x ${height}` : ''} px${dpi ? ` · ${dpi} DPI` : ''} JPG`;
 }
 
 function resolveDocumentLine(item) {
