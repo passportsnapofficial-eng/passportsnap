@@ -1269,12 +1269,12 @@ function buildHeadwearAnalysis(
         ? 'possible_head_covering'
         : 'none';
   const label = hijabDetected
-    ? 'Hijab or religious head covering detected'
+    ? 'Religious head covering detected'
     : hatDetected
       ? 'Hat detected'
       : possibleHeadCovering
         ? 'Possible head covering detected'
-        : 'No hat or hijab detected';
+        : 'No hat or headwear detected';
 
   return {
     supported: true,

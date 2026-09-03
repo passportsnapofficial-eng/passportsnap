@@ -75,8 +75,8 @@ const FEATURE_GROUPS = [
       },
       {
         icon: Glasses,
-        title: 'Glasses, hat, and hijab detection',
-        body: 'Flags eyewear and hats while treating hijabs and religious head coverings separately when the full face remains visible.',
+        title: 'Glasses, hat, and headwear detection',
+        body: 'Flags eyewear and hats while treating religious head coverings separately when the full face remains visible.',
       },
       {
         icon: Sun,

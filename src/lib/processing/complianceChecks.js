@@ -367,10 +367,10 @@ export function buildComplianceChecks(processed, preset, documentType = null) {
       'Headwear',
       'hijabDetection',
       headwear.hijabDetected
-        ? 'Hijab or religious head covering detected'
+        ? 'Religious head covering detected'
         : headwear.possibleHeadCovering
           ? 'Possible head covering detected'
-          : 'No hijab detected',
+          : 'No religious head covering detected',
       headwear.hijabDetected
         ? 'Religious head coverings are treated separately from hats. Keep the full face visible from the bottom of the chin to the top of the forehead.'
         : headwear.possibleHeadCovering

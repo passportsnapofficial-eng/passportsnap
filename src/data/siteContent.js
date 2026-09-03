@@ -2,7 +2,7 @@ export const HERO_BADGES = [
   'Official sizing',
   'DoS-guided checks',
   '300 DPI JPG',
-  'Hat & hijab check',
+  'Hat & headwear check',
 ];
 
 export const TRUST_STRIP_POINTS = [

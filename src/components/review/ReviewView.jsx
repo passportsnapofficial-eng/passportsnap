@@ -79,7 +79,7 @@ export function ReviewView({
     outputDpi >= HIGH_RES_EXPORT_DPI
       ? `${outputDpi} DPI high-resolution JPG`
       : `${HIGH_RES_EXPORT_DPI} DPI export required`,
-    result.metadata?.analysis?.headwear?.label || 'Hat and hijab check completed',
+    result.metadata?.analysis?.headwear?.label || 'Headwear check completed',
     'Watermark-free output',
   ];
 
