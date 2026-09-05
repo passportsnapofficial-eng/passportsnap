@@ -1,9 +1,36 @@
-import { ArrowRight, CheckCircle2, Loader2, RefreshCcw, Sparkles } from 'lucide-react';
-import { CAPTURE_MODES, VIEWS } from '../../lib/utils/constants';
+import {
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  Info,
+  Loader2,
+  RefreshCcw,
+  ShieldCheck,
+  Sparkles,
+} from 'lucide-react';
+import { CAPTURE_MODES, CHECK_STATUSES, VIEWS } from '../../lib/utils/constants';
 import { HIGH_RES_EXPORT_DPI } from '../../lib/processing/exportResolution';
 import { FlowShell } from '../flow/FlowShell';
 import { FlagMark } from '../shared/FlagMark';
 import { ProtectedPhotoPreview } from '../shared/ProtectedPhotoPreview';
+
+const VERIFICATION_TONES = {
+  pass: { card: 'border-slate-200 bg-slate-50', icon: 'text-emerald-600', Icon: CheckCircle2 },
+  info: { card: 'border-amber-200 bg-amber-50/70', icon: 'text-amber-700', Icon: Info },
+  fail: { card: 'border-red-200 bg-red-50/70', icon: 'text-red-600', Icon: AlertTriangle },
+};
+
+function toneForCheck(check) {
+  if (check?.status === CHECK_STATUSES.passed) {
+    return 'pass';
+  }
+
+  if (check?.status === CHECK_STATUSES.failed) {
+    return 'fail';
+  }
+
+  return 'info';
+}
 
 function getReviewCopy(result) {
   if (result.status === 'needs_retake') {
@@ -75,12 +102,59 @@ export function ReviewView({
         'Use softer light and a plain background',
       ];
   const outputDpi = Number(result.metadata?.outputDpi || result.metadata?.analysis?.technical?.outputDpi || 0);
+  const outputWidth = Number(result.outputWidth || result.metadata?.outputWidth || 0);
+  const outputHeight = Number(result.outputHeight || result.metadata?.outputHeight || 0);
+  const findCheck = (key) =>
+    (Array.isArray(result.checks) ? result.checks.find((item) => item.key === key) : null) || null;
+  const hatCheck = findCheck('hatFree');
+  const eyewearCheck = findCheck('eyewearFree');
+  const hatTone = toneForCheck(hatCheck);
+  const eyewearTone = toneForCheck(eyewearCheck);
+  const printSummary = outputWidth && outputHeight
+    ? `${outputWidth} x ${outputHeight} px at ${result.sizeLabel}, so it stays sharp at full print size.`
+    : `Exported at ${outputDpi} DPI so it stays sharp at full print size.`;
   const verificationItems = [
     outputDpi >= HIGH_RES_EXPORT_DPI
-      ? `${outputDpi} DPI high-resolution JPG`
-      : `${HIGH_RES_EXPORT_DPI} DPI export required`,
-    result.metadata?.analysis?.headwear?.label || 'Headwear check completed',
-    'Watermark-free output',
+      ? {
+          id: 'resolution',
+          tone: 'pass',
+          title: `Print-ready at ${outputDpi} DPI`,
+          detail: printSummary,
+        }
+      : {
+          id: 'resolution',
+          tone: 'info',
+          title: `${HIGH_RES_EXPORT_DPI} DPI export required`,
+          detail: 'We rebuild the file at full print resolution before your download is released.',
+        },
+    {
+      id: 'hat',
+      tone: hatTone,
+      title:
+        hatTone === 'pass'
+          ? 'No hat detected'
+          : hatTone === 'fail'
+            ? 'Hat detected'
+            : 'Hat check unavailable',
+      detail:
+        hatTone === 'pass'
+          ? 'No cap, hat, or fashion headwear in the frame.'
+          : hatCheck?.helpText || hatCheck?.noteText || 'Check the headwear rules manually before you submit this photo.',
+    },
+    {
+      id: 'eyewear',
+      tone: eyewearTone,
+      title:
+        eyewearTone === 'pass'
+          ? 'No glasses detected'
+          : eyewearTone === 'fail'
+            ? 'Glasses detected'
+            : 'Glasses need a closer look',
+      detail:
+        eyewearTone === 'pass'
+          ? 'Your eyes are fully visible, with no frames, glare, or tint in the way.'
+          : eyewearCheck?.helpText || eyewearCheck?.noteText || 'Keep your eyes fully visible and free of glare before you submit this photo.',
+    },
   ];
 
   return (
@@ -213,15 +287,29 @@ export function ReviewView({
         <aside className="space-y-4">
           <div className="surface-card p-5 sm:p-6">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-              <CheckCircle2 className="h-4 w-4 text-blue-600" />
-              File and headwear checks
+              <ShieldCheck className="h-4 w-4 text-blue-600" />
+              Photo and file checks
             </div>
             <div className="mt-4 space-y-3">
-              {verificationItems.map((item) => (
-                <div key={item} className="rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm leading-6 text-slate-700">
-                  {item}
-                </div>
-              ))}
+              {verificationItems.map((item) => {
+                const tone = VERIFICATION_TONES[item.tone] || VERIFICATION_TONES.info;
+                const ToneIcon = tone.Icon;
+
+                return (
+                  <div
+                    key={item.id}
+                    className={`flex items-start gap-3 rounded-2xl border px-4 py-3 ${tone.card}`}
+                  >
+                    <ToneIcon className={`mt-0.5 h-4 w-4 shrink-0 ${tone.icon}`} />
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-slate-900">{item.title}</div>
+                      {item.detail ? (
+                        <div className="mt-1 text-sm leading-6 text-slate-600">{item.detail}</div>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
