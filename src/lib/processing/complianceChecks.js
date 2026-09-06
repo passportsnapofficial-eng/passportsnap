@@ -304,6 +304,9 @@ export function buildComplianceChecks(processed, preset, documentType = null) {
   );
   const backgroundAdvisoryOnly = allowBackgroundCleanup && (backgroundRemovalAttempted || backgroundRemovalApplied);
   const eyewearClassifierReady = Boolean(eyewear.classifierReady);
+  // Either the analysis never ran, or it ran and could not decide.
+  const eyewearUndecided =
+    eyewear.supported === false || (Boolean(eyewear.glassesAbstain) && !eyewear.wearingGlasses);
   const highConfidenceEyewear =
     Boolean(eyewear.wearingGlasses) &&
     (
@@ -348,20 +351,23 @@ export function buildComplianceChecks(processed, preset, documentType = null) {
   const checks = [];
 
   checks.push(
-    headwear.supported
+    // Only ever assert the failing side. The automatic headwear signals do not
+    // separate a dark cap from dark hair, so clearing a photo on their say-so
+    // would be guessing; ask the person to confirm instead.
+    headwear.hatDetected
       ? createPassedCheck(
           'Headwear',
           'hatFree',
           'No hat detected',
           'Hat detected',
-          !headwear.hatDetected,
+          false,
           'Remove hats, caps, and fashion headwear. Religious head coverings may remain when the full face is visible.',
         )
       : createInfoCheck(
           'Headwear',
           'hatFree',
-          'Hat detection unavailable',
-          'The headwear detector could not confidently inspect this photo. Check it manually before submission.',
+          "We couldn't check for a hat",
+          'The automatic headwear check is not reliable enough to clear this photo on its own, so please confirm it yourself. Remove hats, caps and fashion headwear. Religious head coverings may stay on when the full face is visible.',
         ),
     createInfoCheck(
       'Headwear',
@@ -504,7 +510,17 @@ export function buildComplianceChecks(processed, preset, documentType = null) {
       Boolean(lighting.eyeLevelOkay),
       'Keep your head upright so the eyes stay level.',
     ),
-    eyewearPolicy === 'conditional'
+    // When the detector could not reach a verdict, say so. Reporting "No
+    // glasses detected" on an abstention is exactly what let photos of people
+    // plainly wearing glasses through as compliant.
+    eyewearUndecided
+      ? createInfoCheck(
+          'Eyes & Expression',
+          'eyewearFree',
+          "We couldn't check for glasses",
+          'The photo was too small, dark or uneven for the glasses check to be sure. Confirm yourself that you are not wearing glasses before you submit it.',
+        )
+      : eyewearPolicy === 'conditional'
       ? createAdvisoryCheck(
           'Eyes & Expression',
           'eyewearFree',

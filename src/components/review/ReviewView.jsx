@@ -130,30 +130,23 @@ export function ReviewView({
     {
       id: 'hat',
       tone: hatTone,
-      title:
-        hatTone === 'pass'
-          ? 'No hat detected'
-          : hatTone === 'fail'
-            ? 'Hat detected'
-            : 'Hat check unavailable',
+      title: hatCheck?.label || "We couldn't check for a hat",
       detail:
-        hatTone === 'pass'
-          ? 'No cap, hat, or fashion headwear in the frame.'
-          : hatCheck?.helpText || hatCheck?.noteText || 'Check the headwear rules manually before you submit this photo.',
+        hatTone === 'fail'
+          ? hatCheck?.helpText || 'Remove hats, caps, and fashion headwear before you submit this photo.'
+          : hatCheck?.noteText ||
+            'Please confirm yourself that no cap, hat or fashion headwear is in the frame.',
     },
     {
       id: 'eyewear',
       tone: eyewearTone,
-      title:
-        eyewearTone === 'pass'
-          ? 'No glasses detected'
-          : eyewearTone === 'fail'
-            ? 'Glasses detected'
-            : 'Glasses need a closer look',
+      title: eyewearCheck?.label || "We couldn't check for glasses",
       detail:
         eyewearTone === 'pass'
           ? 'Your eyes are fully visible, with no frames, glare, or tint in the way.'
-          : eyewearCheck?.helpText || eyewearCheck?.noteText || 'Keep your eyes fully visible and free of glare before you submit this photo.',
+          : eyewearCheck?.helpText ||
+            eyewearCheck?.noteText ||
+            'Please confirm yourself that you are not wearing glasses.',
     },
   ];
 

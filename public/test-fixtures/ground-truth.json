@@ -1,0 +1,293 @@
+{
+  "description": "Human-verified labels for the pipeline-batch fixtures. Used by scripts/runDetectionBenchmark.mjs to score glasses and headwear detection. Labels were assigned by visual inspection of each image.",
+  "labelledAt": "2026-09-05",
+  "fields": {
+    "glasses": "true when any eyeglasses or sunglasses are worn on the face",
+    "hat": "true when a hat, cap, beanie, or other non-religious headwear is worn",
+    "headCovering": "true when a religious or medical head covering is worn",
+    "skinTone": "coarse light | medium | dark grouping, for per-group metrics only",
+    "notes": "why the case is interesting"
+  },
+  "cases": [
+    {
+      "file": "local-batch/glasses_close_up.webp",
+      "glasses": true,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "light",
+      "notes": "Thin round metal frames, light skin, plain pink background. Currently detected."
+    },
+    {
+      "file": "local-batch/WhatsApp Image 2026-04-07 at 11.06.38 PM.jpeg",
+      "glasses": true,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "dark",
+      "notes": "Heavy black rectangular frames, dark skin, white background. Currently detected."
+    },
+    {
+      "file": "local-batch/WhatsApp Image 2026-04-08 at 12.14.41 PM (1).jpeg",
+      "glasses": true,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "dark",
+      "notes": "REGRESSION CASE. Dark frames, dark skin, dark navy background, small image. All frame signals near zero. Currently a false negative."
+    },
+    {
+      "file": "external/pexels-man-1.jpeg",
+      "glasses": true,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "light",
+      "notes": "REGRESSION CASE. Black rectangular frames with lens glare. Every frame signal clears its threshold but the glareRatio <= 0.04 veto rejects it. Currently a false negative."
+    },
+    {
+      "file": "external/unsplash-woman-3.jpg",
+      "glasses": true,
+      "hat": true,
+      "headCovering": false,
+      "skinTone": "light",
+      "notes": "REGRESSION CASE. Black frames AND a grey beanie, three-quarter view. No face detected at all, so every signal is zero and both checks silently report a pass."
+    },
+    {
+      "file": "local-batch/360_F_373522464_UzkM3IvqgqpS0qIy2kpkB5QiV7Bw7NyS.jpg",
+      "glasses": false,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "dark",
+      "notes": "Clean passport-style portrait, blue background."
+    },
+    {
+      "file": "local-batch/4a9c9654-aa65-45e8-b34a-3ce3f730583d.webp",
+      "glasses": false,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "light",
+      "notes": "Synthetic passport portrait, blue background."
+    },
+    {
+      "file": "local-batch/4a9c9654-aa65-45e8-b34a-3ce3f730583d-background-removed.jpg",
+      "glasses": false,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "light",
+      "notes": "Same source as above with the background removed. Tests headwear ratios against a cut-out foreground."
+    },
+    {
+      "file": "local-batch/official-portrait-woman-passport-photo-600nw-2370794875.webp",
+      "glasses": false,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "dark",
+      "notes": "Compliant passport portrait, white background."
+    },
+    {
+      "file": "local-batch/passport-photo-serious-young-adult-600nw-2317626543.webp",
+      "glasses": false,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "medium",
+      "notes": "Braided hair worn up. Hair volume above the crown is a hat false-positive risk."
+    },
+    {
+      "file": "local-batch/WhatsApp Image 2026-04-07 at 11.23.51 PM.jpeg",
+      "glasses": false,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "dark",
+      "notes": "Shoulder-length dark hair. templeDarkRatio 0.328 comes entirely from hair."
+    },
+    {
+      "file": "local-batch/WhatsApp Image 2026-04-07 at 11.23.52 PM.jpeg",
+      "glasses": false,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "dark",
+      "notes": "Clean portrait, cream background."
+    },
+    {
+      "file": "local-batch/WhatsApp Image 2026-04-07 at 11.23.52 PM (1).jpeg",
+      "glasses": false,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "dark",
+      "notes": "Clean portrait, pale pink background."
+    },
+    {
+      "file": "local-batch/WhatsApp Image 2026-04-07 at 11.23.52 PM (2).jpeg",
+      "glasses": false,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "dark",
+      "notes": "Locs framing the face. Side-region hat false-positive risk."
+    },
+    {
+      "file": "local-batch/WhatsApp Image 2026-04-07 at 11.23.52 PM (3).jpeg",
+      "glasses": false,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "dark",
+      "notes": "Bald older man, white background. Tests that a bare crown is not read as headwear."
+    },
+    {
+      "file": "external/pexels-man-2.jpeg",
+      "glasses": false,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "light",
+      "notes": "Strong brows and directional light. bridgeDarkRatio 0.338 with no glasses present."
+    },
+    {
+      "file": "external/pexels-woman-1.jpeg",
+      "glasses": false,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "light",
+      "notes": "Studio beauty portrait, yellow background."
+    },
+    {
+      "file": "external/pexels-woman-2.jpeg",
+      "glasses": false,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "light",
+      "notes": "Voluminous hair over the temples."
+    },
+    {
+      "file": "external/pexels-woman-3.jpeg",
+      "glasses": false,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "light",
+      "notes": "HARD NEGATIVE. bridgeDarkRatio 0.453 and templeDarkRatio 0.510 with no glasses. Only the glare veto prevents a false positive."
+    },
+    {
+      "file": "external/pexels-headshot-man-1.jpeg",
+      "glasses": false,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "medium",
+      "notes": "Heavy brows, beard, curly hair. Strong frame-like signals with no glasses."
+    },
+    {
+      "file": "external/pexels-headshot-man-2.jpeg",
+      "glasses": false,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "medium",
+      "notes": "Monochrome, heavy brows and beard."
+    },
+    {
+      "file": "external/pexels-headshot-man-3.jpeg",
+      "glasses": false,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "dark",
+      "notes": "HARD NEGATIVE. Every structured-frame threshold is exceeded (bridgeD 0.387, bridgeE 0.541, tmplD 0.398, bandE 0.507) with no glasses present. Only the glare veto saves it."
+    },
+    {
+      "file": "external/pexels-headshot-man-4.jpeg",
+      "glasses": false,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "light",
+      "notes": "HARD NEGATIVE. Very heavy dark brows, glare 0.001. Fails the structured gate only on bridgeDarkRatio."
+    },
+    {
+      "file": "external/pexels-headshot-man-5.jpeg",
+      "glasses": false,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "dark",
+      "notes": "Very low-key lighting on dark skin. Tests behaviour at the low end of the dynamic range."
+    },
+    {
+      "file": "external/pexels-headshot-man-6.jpeg",
+      "glasses": false,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "light",
+      "notes": "Corporate headshot, grey background."
+    },
+    {
+      "file": "external/pexels-headshot-woman-1.jpeg",
+      "glasses": false,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "medium",
+      "notes": "Curly hair across the temples, dramatic side light."
+    },
+    {
+      "file": "external/pexels-headshot-woman-2.jpeg",
+      "glasses": false,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "medium",
+      "notes": "Dark hair over the temples, dark background."
+    },
+    {
+      "file": "external/pexels-headshot-woman-3.jpeg",
+      "glasses": false,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "light",
+      "notes": "Blonde hair, light background."
+    },
+    {
+      "file": "external/pexels-headshot-woman-4.jpeg",
+      "glasses": false,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "light",
+      "notes": "Hair across one temple, white background."
+    },
+    {
+      "file": "external/unsplash-man-1.jpg",
+      "glasses": false,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "light",
+      "notes": "HARD NEGATIVE. eyewearScore 0.97 with no glasses."
+    },
+    {
+      "file": "external/unsplash-man-2.jpg",
+      "glasses": false,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "light",
+      "notes": "HARD NEGATIVE. eyewearScore 1.00, bridgeD 0.347, tmplD 0.617 with no glasses."
+    },
+    {
+      "file": "external/unsplash-woman-1.jpg",
+      "glasses": false,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "light",
+      "notes": "Outdoor bokeh background, laughing."
+    },
+    {
+      "file": "external/unsplash-woman-2.jpg",
+      "glasses": false,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "light",
+      "notes": "Outdoor portrait, hair over the temples."
+    },
+    {
+      "file": "local-batch/user-glasses-tortoiseshell.jpeg",
+      "glasses": true,
+      "hat": false,
+      "headCovering": false,
+      "skinTone": "dark",
+      "notes": "USER REGRESSION CASE. Tortoiseshell frames are LIGHTER than the surrounding skin, so a dark-bar-only detector has no code path that can see them. Strong lens reflections."
+    },
+    {
+      "file": "local-batch/user-hat-black-cap.jpeg",
+      "glasses": false,
+      "hat": true,
+      "headCovering": false,
+      "skinTone": "dark",
+      "notes": "USER REGRESSION CASE. Black baseball cap on dark skin: absolute RGB distance from cheek colour cannot separate the cap from hair or from the face."
+    }
+  ]
+}

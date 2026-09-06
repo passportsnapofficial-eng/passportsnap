@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>ROI debug</title>
+    <style>
+      body { margin: 0; background: #111; }
+      canvas { display: block; margin: 0 auto; }
+    </style>
+  </head>
+  <body>
+    <canvas id="out"></canvas>
+    <script type="module">
+      import { detectPassportFaces } from '/src/lib/processing/mediapipeVision.js';
+      import { buildFaceFrame } from '/src/lib/processing/detectionSignals.js';
+
+      const url = new URL(window.location.href);
+      const src = url.searchParams.get('src');
+
+      async function run() {
+        const bitmap = await createImageBitmap(await (await fetch(src)).blob());
+        const canvas = document.getElementById('out');
+        const scale = Math.min(1, 900 / bitmap.width);
+        canvas.width = Math.round(bitmap.width * scale);
+        canvas.height = Math.round(bitmap.height * scale);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+
+        const detection = await detectPassportFaces(canvas, canvas.width, canvas.height);
+        const primary = detection?.primaryFace;
+        if (!primary) {
+          window.__debugError = 'no face: ' + (detection?.error || '');
+          window.__debugReady = true;
+          return;
+        }
+
+        // Use exactly the projected landmarks the worker consumes.
+        const points = primary.landmarks;
+        const frame = buildFaceFrame(points);
+        if (!frame) {
+          window.__debugError = 'no frame';
+          window.__debugReady = true;
+          return;
+        }
+
+        const toImage = (anchor, u, v) => ({
+          x: anchor.x + frame.u.x * u * frame.iod + frame.v.x * v * frame.iod,
+          y: anchor.y + frame.u.y * u * frame.iod + frame.v.y * v * frame.iod,
+        });
+
+        const drawBox = (anchor, ranges, colour, label) => {
+          const corners = [
+            toImage(anchor, ranges.uMin, ranges.vMin),
+            toImage(anchor, ranges.uMax, ranges.vMin),
+            toImage(anchor, ranges.uMax, ranges.vMax),
+            toImage(anchor, ranges.uMin, ranges.vMax),
+          ];
+          ctx.strokeStyle = colour;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(corners[0].x, corners[0].y);
+          for (let i = 1; i < corners.length; i += 1) ctx.lineTo(corners[i].x, corners[i].y);
+          ctx.closePath();
+          ctx.stroke();
+          ctx.fillStyle = colour;
+          ctx.font = '13px monospace';
+          ctx.fillText(label, corners[0].x, corners[0].y - 4);
+        };
+
+        drawBox(frame.nasion, { uMin: -0.5, uMax: 0.5, vMin: -0.45, vMax: 0.65 }, '#00ff88', 'bridge');
+        drawBox(frame.origin, { uMin: -1.05, uMax: -0.15, vMin: -0.6, vMax: 0.55 }, '#ffcc00', 'lensR');
+        drawBox(frame.origin, { uMin: 0.15, uMax: 1.05, vMin: -0.6, vMax: 0.55 }, '#ffcc00', 'lensL');
+        drawBox(frame.origin, { uMin: -1.15, uMax: -0.55, vMin: 0.45, vMax: 1.15 }, '#66aaff', 'skin');
+        drawBox(frame.origin, { uMin: -0.45, uMax: 0.45, vMin: -1.25, vMax: -0.75 }, '#66aaff', 'skinF');
+
+        const dot = (p, colour) => {
+          ctx.fillStyle = colour;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+          ctx.fill();
+        };
+        dot(frame.rightIris, '#ff0066');
+        dot(frame.leftIris, '#ff0066');
+        dot(frame.nasion, '#ffffff');
+
+        window.__debugInfo = {
+          landmarkCount: points.length,
+          iod: frame.iod,
+          nasion: frame.nasion,
+          origin: frame.origin,
+          hasIris: Boolean(points[468] && points[473]),
+        };
+        window.__debugReady = true;
+      }
+
+      run().catch((error) => {
+        window.__debugError = String(error);
+        window.__debugReady = true;
+      });
+    </script>
+  </body>
+</html>

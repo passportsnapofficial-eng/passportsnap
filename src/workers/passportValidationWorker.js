@@ -1,5 +1,12 @@
 import { projectFaceDetectionToCrop } from '../lib/processing/faceDetection';
 import { classifyEyewearFromCanvas } from '../lib/processing/eyewearClassifierRuntime';
+import {
+  analyzeEyewearGeometry,
+  analyzeHeadwearGeometry,
+  buildLuminanceFields,
+  fuseEyewearSignals,
+  fuseHeadwearSignals,
+} from '../lib/processing/detectionSignals';
 import { resolveHighResolutionExport } from '../lib/processing/exportResolution';
 
 function clamp(value, min, max) {
@@ -1068,6 +1075,7 @@ function buildHeadwearAnalysis(
   height,
   foregroundMask,
   primaryFace,
+  logLuminance,
 ) {
   if (!primaryFace || !foregroundMask?.data) {
     return {
@@ -1261,28 +1269,49 @@ function buildHeadwearAnalysis(
     minimumTopOverhangCoverage >= 0.47;
   const possibleHeadCovering =
     !hatDetected && !hijabDetected && (possibleHijabPattern || possibleHatPattern);
-  const detectedType = hijabDetected
+  // The ratios above compare crown colour to cheek colour with an absolute RGB
+  // distance, which cannot separate dark hair from a dark hat on dark skin, and
+  // adds the crown's edge density with a positive weight, so textured hair reads
+  // as fabric. The geometry below compares the subject to themselves instead.
+  const geometry = logLuminance
+    ? analyzeHeadwearGeometry(imageData, logLuminance, width, height, points, foregroundMask)
+    : { supported: false, reason: 'no-log-luminance' };
+  const fusedHeadwear = fuseHeadwearSignals(geometry);
+  const geometryHat = Boolean(fusedHeadwear.hatDetected);
+  const resolvedHatDetected = hatDetected || geometryHat;
+  const resolvedPossible =
+    !resolvedHatDetected && !hijabDetected && (possibleHeadCovering || Boolean(fusedHeadwear.abstain));
+  const resolvedType = hijabDetected
     ? 'hijab'
-    : hatDetected
+    : resolvedHatDetected
       ? 'hat'
-      : possibleHeadCovering
+      : resolvedPossible
         ? 'possible_head_covering'
         : 'none';
+
   const label = hijabDetected
     ? 'Religious head covering detected'
-    : hatDetected
+    : resolvedHatDetected
       ? 'Hat detected'
-      : possibleHeadCovering
+      : resolvedPossible
         ? 'Possible head covering detected'
         : 'No hat or headwear detected';
 
   return {
     supported: true,
-    detectedType,
+    detectedType: resolvedType,
     label,
-    hatDetected,
+    hatDetected: resolvedHatDetected,
     hijabDetected,
-    possibleHeadCovering,
+    possibleHeadCovering: resolvedPossible,
+    headwearProbability: Number(fusedHeadwear.probability || 0),
+    headwearAbstain: Boolean(fusedHeadwear.abstain),
+    geometrySupported: Boolean(geometry.supported),
+    crownToBrowDistance: Number(geometry.crownToBrowDistance || 0),
+    crownToForeheadDistance: Number(geometry.crownToForeheadDistance || 0),
+    crownTextureRatio: Number(geometry.textureRatio || 0),
+    crownMaxWidthStep: Number(geometry.maxWidthStep || 0),
+    crownTopFlatness: Number(geometry.topFlatness || 0),
     confidence: Math.max(hatScore, hijabScore),
     hatScore,
     hijabScore,
@@ -1299,12 +1328,14 @@ function buildHeadwearAnalysis(
   };
 }
 
-function buildHeuristicEyewearAnalysis(imageData, grayscale, width, height, primaryFace) {
+function buildHeuristicEyewearAnalysis(imageData, grayscale, width, height, primaryFace, logLuminance) {
   if (!primaryFace) {
     return {
       supported: false,
       wearingGlasses: false,
       heuristicHighConfidence: false,
+      glassesProbability: 0,
+      glassesAbstain: true,
       eyewearScore: 0,
       eyeBandDarkRatio: 0,
       eyeBandEdgeDensity: 0,
@@ -1422,12 +1453,37 @@ function buildHeuristicEyewearAnalysis(imageData, grayscale, width, height, prim
     eyeToFaceLuminanceRatio <= 0.9;
   const heuristicHighConfidence =
     structuredLowGlareFrames || lowResolutionDarkFrames || reflectiveThinFrames;
-  const wearingGlasses = heuristicHighConfidence;
+
+  // The rules above key on absolute darkness and edge magnitudes, so they only
+  // fire for dark frames on light skin and in the absence of lens glare. They
+  // have high precision, so they are kept as an OR, but the geometric signals
+  // below are what actually carry recall.
+  const geometry = logLuminance
+    ? analyzeEyewearGeometry(imageData, logLuminance, width, height, points)
+    : { supported: false, reason: 'no-log-luminance' };
+  const fused = fuseEyewearSignals(geometry);
+  const wearingGlasses = fused.wearingGlasses || heuristicHighConfidence;
 
   return {
     supported: true,
     wearingGlasses,
     heuristicHighConfidence,
+    geometrySupported: Boolean(geometry.supported),
+    geometryReason: geometry.reason || '',
+    glassesProbability: Number(fused.probability || 0),
+    glassesAbstain: Boolean(fused.abstain) && !heuristicHighConfidence,
+    bridgeContinuity: Number(geometry.bridgeContinuity || 0),
+    bridgeBestRowContinuity: Number(geometry.bridgeBestRowContinuity || 0),
+    bridgeBandContinuity: Number(geometry.bridgeBandContinuity || 0),
+    bridgeFlatness: Number(geometry.bridgeFlatness || 0),
+    bridgeStrength: Number(geometry.bridgeStrength || 0),
+    bridgePolarity: Number(geometry.bridgePolarity || 0),
+    bridgeHeightOffset: Number(geometry.bridgeHeightOffset || 0),
+    bridgeQuality: Number(fused.bridgeQuality || 0),
+    rimScore: Number(geometry.rimScore || 0),
+    specularPaired: Number(geometry.specularPaired || 0),
+    interocularDistance: Number(geometry.iod || 0),
+    resolutionRatio: Number(geometry.resolutionRatio || 0),
     eyewearScore,
     eyeBandDarkRatio: eyeBand.dynamicDarkRatio,
     eyeBandEdgeDensity: eyeBand.edgeDensity,
@@ -1444,13 +1500,22 @@ function buildHeuristicEyewearAnalysis(imageData, grayscale, width, height, prim
   };
 }
 
-async function buildEyewearAnalysis(analysisCanvas, imageData, grayscale, width, height, primaryFace) {
+async function buildEyewearAnalysis(
+  analysisCanvas,
+  imageData,
+  grayscale,
+  width,
+  height,
+  primaryFace,
+  logLuminance,
+) {
   const heuristic = buildHeuristicEyewearAnalysis(
     imageData,
     grayscale,
     width,
     height,
     primaryFace,
+    logLuminance,
   );
   const learned = await classifyEyewearFromCanvas(
     analysisCanvas,
@@ -1487,12 +1552,17 @@ async function buildEyewearAnalysis(analysisCanvas, imageData, grayscale, width,
   const strongModelPositive = mlEyewearScore >= 0.9 && classifierMargin >= 0.22;
   const moderateModelPositive = mlEyewearScore >= 0.78 && classifierMargin >= 0.16;
   const strongModelNegative = mlNoEyewearScore >= 0.72 && classifierMargin <= -0.06;
-  const wearingGlasses = strongModelNegative
-    ? false
-    : (strongModelPositive && corroboratedHeuristic) ||
-      (moderateModelPositive && heuristicPositive) ||
-      heuristic.eyewearScore >= 0.84 ||
-      (mlEyewearScore >= 0.84 && heuristic.glareRatio >= 0.08 && heuristic.bridgeDarkRatio >= 0.15);
+  // The geometric verdict stands on its own. A model negative can soften a
+  // borderline geometric positive but must not veto a confident one, or a
+  // mis-scoring classifier would reintroduce the false negatives it was added
+  // to fix.
+  const geometryPositive = heuristic.wearingGlasses;
+  const geometryConfident = Number(heuristic.glassesProbability || 0) >= 0.75;
+  const wearingGlasses =
+    (geometryPositive && (geometryConfident || !strongModelNegative)) ||
+    (strongModelPositive && corroboratedHeuristic) ||
+    (moderateModelPositive && heuristicPositive) ||
+    (mlEyewearScore >= 0.84 && heuristic.glareRatio >= 0.08 && heuristic.bridgeDarkRatio >= 0.15);
 
   return {
     ...heuristic,
@@ -1743,6 +1813,9 @@ export async function validatePassportPhotoPayload(payload, options = {}) {
   postStage('validate-face', { requestId, onStageChange });
   const faceRect = getFaceRect(primaryFace);
   const grayscale = buildGrayscale(analysisImageData, analysisWidth, analysisHeight);
+  // Log luminance for the skin-tone-robust eyewear and headwear signals. Built
+  // once here because both analyses consume it.
+  const luminanceFields = buildLuminanceFields(analysisImageData, analysisWidth, analysisHeight);
 
   postStage('analyze-lighting', { requestId, onStageChange });
   const lighting = buildLightingAnalysis(analysisImageData, analysisWidth, analysisHeight, primaryFace);
@@ -1760,6 +1833,7 @@ export async function validatePassportPhotoPayload(payload, options = {}) {
     analysisWidth,
     analysisHeight,
     primaryFace,
+    luminanceFields.log,
   );
   const headwear = buildHeadwearAnalysis(
     analysisImageData,
@@ -1768,6 +1842,7 @@ export async function validatePassportPhotoPayload(payload, options = {}) {
     analysisHeight,
     foregroundMask,
     primaryFace,
+    luminanceFields.log,
   );
   const rejectionReasons = buildRejectionReasons(
     projectedFaceDetection,

@@ -1,0 +1,14 @@
+import { chromium } from 'playwright';
+const [src, out] = process.argv.slice(2);
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 1000, height: 1200 } });
+page.on('pageerror', (e) => console.log('PAGEERROR', String(e), e.stack || ''));
+page.on('console', (m) => console.log('CONSOLE', m.type(), m.text()));
+page.on('requestfailed', (r) => console.log('REQFAIL', r.url(), r.failure()?.errorText));
+await page.goto('http://127.0.0.1:5173/debug-roi.html?src=' + encodeURIComponent(src), { waitUntil: 'domcontentloaded' });
+await page.waitForFunction(() => window.__debugReady === true, null, { timeout: 120000 });
+const info = await page.evaluate(() => ({ info: window.__debugInfo, error: window.__debugError }));
+console.log(JSON.stringify(info));
+await page.waitForTimeout(400);
+await page.locator('#out').screenshot({ path: out });
+await browser.close();
