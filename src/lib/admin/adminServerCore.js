@@ -1138,9 +1138,16 @@ export async function upsertAdminOrderRecord(payload) {
 }
 
 export async function getAdminOverview() {
+  // Stripe being unreachable must not blank the whole dashboard. Orders,
+  // accounts and the review queue are independent of it, so degrade to "no
+  // transactions loaded" and report why instead of failing the request.
+  let transactionError = '';
   const [storedReviewRequests, transactions, profiles, orders, settings] = await Promise.all([
     loadReviewRequests(),
-    listTransactions(),
+    listTransactions().catch((error) => {
+      transactionError = error instanceof Error ? error.message : 'Unable to load transaction data.';
+      return [];
+    }),
     listProfiles().catch(() => []),
     loadOrders().catch(() => []),
     loadSiteSettings(),
@@ -1307,6 +1314,7 @@ export async function getAdminOverview() {
     settings,
     users,
     transactions: transactions.sort((left, right) => sortByLatest(left.paidAt || left.createdAt, right.paidAt || right.createdAt)),
+    transactionError,
     reviewRequests,
   };
 }

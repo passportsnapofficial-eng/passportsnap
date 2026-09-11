@@ -1617,6 +1617,16 @@ export function AdminView({ onSiteSettingsChange = null }) {
             </div>
           ) : null}
 
+          {overview?.transactionError ? (
+            <div className="mb-6 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                Stripe transactions could not be loaded, so the transaction lists are incomplete.
+                Orders and accounts below are unaffected. ({overview.transactionError})
+              </span>
+            </div>
+          ) : null}
+
           {activeTab === 'overview' && (
             <OverviewTab metrics={metrics} overview={overview} loading={loading} onRefresh={handleRefresh} />
           )}

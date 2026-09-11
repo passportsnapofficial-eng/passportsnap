@@ -365,8 +365,14 @@ const server = createServer(async (request, response) => {
 
     if (request.method === 'POST' && requestUrl.pathname === '/api/orders/record') {
       const payload = await parseRequestBody(request, 25_000_000);
-      const result = await upsertAdminOrderRecord(payload);
-      sendJson(response, 200, result, requestOrigin);
+      const record = await upsertAdminOrderRecord(payload);
+      // Match the deployed function: acknowledge only, so dev and production
+      // behave the same and we do not echo megabytes of images back.
+      sendJson(response, 200, {
+        ok: true,
+        id: record.id,
+        paymentReference: record.paymentReference,
+      }, requestOrigin);
       return;
     }
 
