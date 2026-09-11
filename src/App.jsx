@@ -170,6 +170,34 @@ function buildCompletedOrder({ verification, cartItems, checkoutOptions }) {
   };
 }
 
+// The delivery endpoint only needs the finished export plus the labels shown in
+// the email body. Posting the whole cart item pushed the original camera upload
+// (`sourcePhoto`, often several MB of base64) through the request body, which
+// blew past the serverless body limit and failed every delivery email.
+function toDeliveryEmailItem(item = {}) {
+  return {
+    documentId: item.documentId || '',
+    documentName: item.documentName || '',
+    countryLabel: item.countryLabel || '',
+    sizeLabel: item.sizeLabel || '',
+    photo: item.photo || '',
+    fulfilledPhoto: item.fulfilledPhoto || '',
+    manualFulfillmentRequired: Boolean(item.manualFulfillmentRequired),
+  };
+}
+
+function describeDeliveryFailure(reason) {
+  if (reason === 'email_not_configured') {
+    return 'The photo is ready to download. Emailing is not switched on for this store yet.';
+  }
+
+  if (reason === 'missing_recipient') {
+    return 'The photo is ready to download. No delivery email address was recorded for this order.';
+  }
+
+  return 'The photo is ready, but the email delivery did not complete.';
+}
+
 async function sendFinishedOrderEmail(order) {
   const items = Array.isArray(order?.items) ? order.items : [];
   const hasDeliverableImage = items.some((item) => {
@@ -200,16 +228,17 @@ async function sendFinishedOrderEmail(order) {
       customerEmail: items[0]?.customerEmail || '',
       receiptEmail: items[0]?.receiptEmail || '',
       deliveryEmail: items[0]?.deliveryEmail || '',
-      items,
+      items: items.map(toDeliveryEmailItem),
     });
     return {
       ...result,
       status: result?.ok ? 'sent' : 'not_sent',
       message: result?.ok
         ? `Finished photo emailed to ${result.recipientEmail}.`
-        : 'The finished photo email could not be confirmed.',
+        : describeDeliveryFailure(result?.reason),
     };
-  } catch {
+  } catch (error) {
+    console.error('Finished photo email delivery failed.', error);
     return {
       ok: false,
       skipped: true,

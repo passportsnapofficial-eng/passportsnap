@@ -24,10 +24,13 @@ export function getReviewFrameLayout(imageWidth, imageHeight, targetAspectRatio,
   let baseWidthRatio = 1;
   let baseHeightRatio = 1;
 
+  // Fill the frame instead of fitting inside it. Fitting a 3:4 phone portrait
+  // into a 2x2 frame left white pillars down both sides, which clipped the
+  // subject's shoulders with a hard vertical edge in the finished photo.
   if (imageAspectRatio > targetAspectRatio) {
-    baseHeightRatio = targetAspectRatio / imageAspectRatio;
-  } else {
     baseWidthRatio = imageAspectRatio / targetAspectRatio;
+  } else {
+    baseHeightRatio = targetAspectRatio / imageAspectRatio;
   }
 
   const baseLeftRatio = (1 - baseWidthRatio) / 2;
