@@ -547,7 +547,25 @@ async function readSupabaseSiteSettings() {
   const siteRecord = Array.isArray(siteRows) ? siteRows[0] || {} : siteRows || {};
   const documents = Array.isArray(documentRows) ? documentRows : [];
 
+  // Read separately so a database that has not had the migration applied yet
+  // still returns prices and fees; a failed select here means "default: on".
+  let customerConfirmationRequired;
+  try {
+    const flagRows = await fetchSupabaseJson(
+      'admin_site_settings?select=customer_confirmation_required&id=eq.default&limit=1',
+      {},
+      'Unable to load the customer confirmation setting.',
+    );
+    const flagRecord = Array.isArray(flagRows) ? flagRows[0] : null;
+    if (flagRecord && typeof flagRecord.customer_confirmation_required === 'boolean') {
+      customerConfirmationRequired = flagRecord.customer_confirmation_required;
+    }
+  } catch {
+    customerConfirmationRequired = undefined;
+  }
+
   return normalizeSiteSettings({
+    customer_confirmation_required: customerConfirmationRequired,
     premium_retouch_fee: siteRecord.premium_retouch_fee,
     digital_print_fee: siteRecord.digital_print_fee,
     digital_print_2_copy_fee: siteRecord.digital_print_2_copy_fee,
@@ -621,7 +639,29 @@ async function upsertSupabaseSiteSettings(settings) {
         ]),
       },
       'Unable to save site settings.',
-    ),
+    ).then(async (result) => {
+      // The confirmation switch lives in a column added by a later migration.
+      // Write it on its own so a database without that column still saves
+      // prices; the error names the migration instead of failing everything.
+      try {
+        await fetchSupabaseJson(
+          'admin_site_settings?id=eq.default',
+          {
+            method: 'PATCH',
+            headers: { Prefer: 'return=minimal' },
+            body: JSON.stringify({ customer_confirmation_required: settings.customerConfirmationRequired }),
+          },
+          'Unable to save the customer confirmation setting.',
+        );
+      } catch {
+        const error = new Error(
+          'Prices saved, but the customer confirmation switch could not be stored: apply supabase/migrations/202610120001_customer_confirmation_switch.sql (npm run supabase:db:push).',
+        );
+        error.statusCode = 409;
+        throw error;
+      }
+      return result;
+    }),
     fetchSupabaseJson(
       'admin_document_settings?on_conflict=document_id',
       {

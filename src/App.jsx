@@ -450,7 +450,9 @@ function buildCheckoutCartPayload(items = []) {
 export default function App() {
   const [siteSettings, setSiteSettings] = useState(() => normalizeSiteSettings({}));
   const documentCatalog = buildActiveDocumentCatalog(siteSettings);
-  const flow = usePassportFlow(documentCatalog);
+  const flow = usePassportFlow(documentCatalog, {
+    customerConfirmationRequired: siteSettings.customerConfirmationRequired,
+  });
   const auth = useSupabaseAuth();
   const [isNavigating, startNavigation] = useTransition();
   const [cart, setCart] = useLocalStorage(STORAGE_KEYS.cart, [], LEGACY_STORAGE_KEYS.cart);

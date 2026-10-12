@@ -56,7 +56,9 @@ export async function processPassportPhoto(sourcePhoto, options = {}) {
   await reportStage('detect-attributes');
   exported.analysis.attributes = await detectPhotoAttributes(exported.dataUrl);
 
-  const checks = buildComplianceChecks(exported, preset, documentType);
+  const checks = buildComplianceChecks(exported, preset, documentType, {
+    customerConfirmationRequired: options.customerConfirmationRequired,
+  });
   const summary = summarizeCompliance(checks);
   const failedCount = summary.failedChecks.length;
   const backgroundToneLabel = exported.analysis.background.backgroundToneLabel || exported.analysis.background.backgroundTone || 'Other';

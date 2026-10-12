@@ -56,8 +56,12 @@ function getInitialView() {
   return getViewForPath(window.location.pathname);
 }
 
-export function usePassportFlow(documentCatalog = DOCUMENT_TYPES) {
+export function usePassportFlow(documentCatalog = DOCUMENT_TYPES, flowOptions = {}) {
   const resolvedDocuments = documentCatalog?.length ? documentCatalog : DOCUMENT_TYPES;
+  // Site settings can refresh while a photo is processing; read the latest at
+  // the moment the checks are built rather than the value captured on mount.
+  const flowOptionsRef = useRef(flowOptions);
+  flowOptionsRef.current = flowOptions;
   const fallbackDocumentId =
     resolvedDocuments.find((document) => document.isActive !== false)?.id ||
     resolvedDocuments[0]?.id ||
@@ -279,6 +283,7 @@ export function usePassportFlow(documentCatalog = DOCUMENT_TYPES) {
         countryLabel: selectedCountryLabel,
         onStageChange: handleStageChange,
         respectSourceFraming: true,
+        customerConfirmationRequired: flowOptionsRef.current.customerConfirmationRequired,
       });
 
       if (runId !== runIdRef.current) {

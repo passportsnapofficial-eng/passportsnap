@@ -1145,9 +1145,11 @@ function SettingsTab({
   onDigitalPrint6CopyFeeChange,
   onComplianceCheckFeeChange,
   onPhotoRetouchingFeeChange,
+  onCustomerConfirmationChange,
   onSave,
   activeDocumentCount,
 }) {
+  const confirmationOn = settingsForm.customerConfirmationRequired !== false;
   const usPassportPrice = settingsForm.documents.find((doc) => doc.documentId === 'us-passport')?.price ?? 0;
   const usBabyPassportPrice = settingsForm.documents.find((doc) => doc.documentId === 'us-baby-passport')?.price ?? 0;
 
@@ -1177,6 +1179,37 @@ function SettingsTab({
       </div>
 
       {/* Premium fee */}
+      <CardShell className="p-5">
+        <SectionHeading
+          title="Customer double-check"
+          subtitle="What happens when the hat, glasses or face-mask check cannot reach a verdict on a photo."
+        />
+        <label className="flex cursor-pointer items-start gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+          <input
+            type="checkbox"
+            className="mt-1 h-5 w-5 shrink-0"
+            checked={confirmationOn}
+            onChange={(e) => onCustomerConfirmationChange(e.target.checked)}
+          />
+          <span className="min-w-0 text-sm leading-6 text-slate-700">
+            <span className="block font-semibold text-slate-900">
+              {confirmationOn ? 'On - ask the customer to confirm' : 'Off - pass or fail on the automatic check alone'}
+            </span>
+            {confirmationOn ? (
+              <span className="mt-1 block">
+                When the automatic check is not sure, the customer must tick &quot;I am not wearing a hat / glasses / a mask&quot;
+                before checkout. Nothing passes silently. A clear detection still blocks outright.
+              </span>
+            ) : (
+              <span className="mt-1 block text-amber-800">
+                When the automatic check is not sure, the photo passes. A clear detection still blocks. Be aware:
+                the hat check is the least reliable of the three, so some caps will reach checkout with this off.
+              </span>
+            )}
+          </span>
+        </label>
+      </CardShell>
+
       <CardShell className="p-5">
         <SectionHeading title="Checkout pricing" subtitle="Set placeholder prices here so storefront totals update without a redeploy." />
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -1674,6 +1707,7 @@ export function AdminView({ onSiteSettingsChange = null }) {
               onDigitalPrint6CopyFeeChange={(val) => setSettingsForm((c) => ({ ...c, digitalPrint6CopyFee: val }))}
               onComplianceCheckFeeChange={(val) => setSettingsForm((c) => ({ ...c, complianceCheckFee: val }))}
               onPhotoRetouchingFeeChange={(val) => setSettingsForm((c) => ({ ...c, photoRetouchingFee: val }))}
+              onCustomerConfirmationChange={(val) => setSettingsForm((c) => ({ ...c, customerConfirmationRequired: Boolean(val) }))}
               onSave={handleSaveSettings}
             />
           )}

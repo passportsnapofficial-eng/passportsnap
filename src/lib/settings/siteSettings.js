@@ -9,6 +9,9 @@ export const DEFAULT_DIGITAL_PRINT_6_COPY_FEE = 6.0;
 export const DEFAULT_COMPLIANCE_CHECK_FEE = 3.99;
 export const DEFAULT_PHOTO_RETOUCHING_FEE = 2.99;
 export const DEFAULT_WATERMARK_TEXT = 'PASSPORTSNAP';
+// When the hat / glasses / mask check cannot reach a verdict: true asks the
+// customer to confirm before checkout; false lets the photo pass. Default on.
+export const DEFAULT_CUSTOMER_CONFIRMATION_REQUIRED = true;
 
 function roundCurrency(value, fallback = 0) {
   const numericValue = Number(value);
@@ -71,6 +74,7 @@ export function getDefaultSiteSettings(baseDocuments = DOCUMENT_TYPES) {
     photoRetouchingFee: DEFAULT_PHOTO_RETOUCHING_FEE,
     watermarkText: DEFAULT_WATERMARK_TEXT,
     watermarkEnabled: false,
+    customerConfirmationRequired: DEFAULT_CUSTOMER_CONFIRMATION_REQUIRED,
     updatedAt: null,
     documents: baseDocuments.map((document, index) => ({
       documentId: document.id,
@@ -134,6 +138,10 @@ export function normalizeSiteSettings(rawSettings = {}, baseDocuments = DOCUMENT
     // Finished and preview images are always watermark-free. Keep this field in
     // the settings payload for backward compatibility with stored admin data.
     watermarkEnabled: false,
+    customerConfirmationRequired: parseBoolean(
+      rawSettings.customerConfirmationRequired ?? rawSettings.customer_confirmation_required,
+      DEFAULT_CUSTOMER_CONFIRMATION_REQUIRED,
+    ),
     updatedAt: normalizeTimestamp(rawSettings.updatedAt || rawSettings.updated_at),
     documents: documents.sort((left, right) => left.displayOrder - right.displayOrder || left.documentId.localeCompare(right.documentId)),
   };

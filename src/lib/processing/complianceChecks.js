@@ -263,7 +263,15 @@ function reasonMatchesFailedCheck(reason, check) {
   return collectFriendlyReasonCandidates(check).has(normalizedReason);
 }
 
-export function buildComplianceChecks(processed, preset, documentType = null) {
+export function buildComplianceChecks(processed, preset, documentType = null, options = {}) {
+  // Admin switch (site settings). On: an undecided hat / glasses / mask check
+  // becomes a confirmation the customer must tick. Off: it passes on the
+  // automatic result alone - "not sure" counts as clear. Default on.
+  const confirmationsEnabled = options.customerConfirmationRequired !== false;
+  const undecided = (group, key, passedLabel, failedLabel, confirmTitle, noteText, confirmLabel, passHelp) =>
+    confirmationsEnabled
+      ? createInfoCheck(group, key, confirmTitle, noteText, { requiresConfirmation: true, confirmLabel })
+      : createPassedCheck(group, key, passedLabel, failedLabel, true, passHelp);
   const faceDetection = processed.analysis.faceDetection;
   const background = processed.analysis.background;
   const eyewear = processed.analysis.eyewear || {};
@@ -383,15 +391,15 @@ export function buildComplianceChecks(processed, preset, documentType = null) {
       ? createPassedCheck('Headwear', 'hatFree', 'No hat detected', 'Hat detected', false, hatHelp)
       : hatCleared
         ? createPassedCheck('Headwear', 'hatFree', 'No hat detected', 'Hat detected', true, hatHelp)
-        : createInfoCheck(
+        : undecided(
             'Headwear',
             'hatFree',
+            'No hat detected',
+            'Hat detected',
             'Confirm you are not wearing a hat',
             'The automatic headwear check could not clear this photo on its own, so please confirm it yourself. Remove hats, caps and fashion headwear. Religious head coverings may stay on when the full face is visible.',
-            {
-              requiresConfirmation: true,
-              confirmLabel: 'I am not wearing a hat, cap, or other fashion headwear.',
-            },
+            'I am not wearing a hat, cap, or other fashion headwear.',
+            hatHelp,
           ),
     // Religious head coverings are permitted, so this never blocks. It exists
     // so the result says what was seen and reminds the customer of the one
@@ -425,15 +433,15 @@ export function buildComplianceChecks(processed, preset, documentType = null) {
       ? createPassedCheck('Face & Position', 'maskFree', 'No face mask detected', 'Face mask detected', false, maskHelp)
       : maskState === 'absent'
         ? createPassedCheck('Face & Position', 'maskFree', 'No face mask detected', 'Face mask detected', true, maskHelp)
-        : createInfoCheck(
+        : undecided(
             'Face & Position',
             'maskFree',
+            'No face mask detected',
+            'Face mask detected',
             'Confirm you are not wearing a face mask',
             'The automatic mask check could not reach a verdict on this photo, so please confirm it yourself before you submit it.',
-            {
-              requiresConfirmation: true,
-              confirmLabel: 'I am not wearing a face mask or anything covering my nose or mouth.',
-            },
+            'I am not wearing a face mask or anything covering my nose or mouth.',
+            maskHelp,
           ),
   );
 
@@ -566,15 +574,15 @@ export function buildComplianceChecks(processed, preset, documentType = null) {
     // glasses detected" on an abstention is exactly what let photos of people
     // plainly wearing glasses through as compliant.
     eyewearUndecided
-      ? createInfoCheck(
+      ? undecided(
           'Eyes & Expression',
           'eyewearFree',
+          'No glasses detected',
+          'Glasses detected',
           'Confirm you are not wearing glasses',
           'The glasses check could not reach a verdict on this photo, so please confirm it yourself before you submit it.',
-          {
-            requiresConfirmation: true,
-            confirmLabel: 'I am not wearing glasses in this photo.',
-          },
+          'I am not wearing glasses in this photo.',
+          'Remove glasses and retake the photo. This document blocks eyewear before checkout.',
         )
       : eyewearPolicy === 'conditional'
       ? createAdvisoryCheck(
@@ -598,15 +606,15 @@ export function buildComplianceChecks(processed, preset, documentType = null) {
         : wearingGlasses
           // Signs of glasses without a confident verdict used to pass with a
           // note. A note is not a verdict; ask instead.
-          ? createInfoCheck(
+          ? undecided(
               'Eyes & Expression',
               'eyewearFree',
+              'No glasses detected',
+              'Glasses detected',
               'Confirm you are not wearing glasses',
               'The checks saw signs of glasses but could not be sure. Confirm yourself before you submit this photo.',
-              {
-                requiresConfirmation: true,
-                confirmLabel: 'I am not wearing glasses in this photo.',
-              },
+              'I am not wearing glasses in this photo.',
+              'Remove glasses and retake the photo. This document blocks eyewear before checkout.',
             )
           : createPassedCheck(
               'Eyes & Expression',
