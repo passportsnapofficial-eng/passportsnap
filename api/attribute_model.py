@@ -33,17 +33,37 @@ ONNX_DIR = ROOT / "services" / "attribute_detection" / "onnx"
 MODEL_FILE = os.getenv("ATTRIBUTE_ONNX_FILE", "vision-fp16.onnx")
 
 
+MODEL_URL = os.getenv(
+    "ATTRIBUTE_MODEL_URL",
+    "https://huggingface.co/wusunanwa/passportsnap-attributes-onnx/resolve/main/vision-fp16.onnx",
+)
+CACHE_FILE = Path("/tmp") / MODEL_FILE
+
+
 def _model_bytes() -> bytes:
-    """The fp16 model is 187 MB, over GitHub's 100 MiB file limit, so it is
-    committed as vision-fp16.onnx.part0/1 and joined here. A whole file is
-    used when present (local development after export_onnx.py)."""
+    """Resolve the 187 MB fp16 model, in order of preference:
+    1. a whole file next to prompts.json (local development after export);
+    2. the committed .part files joined (GitHub's 100 MiB limit forced the split);
+    3. a download from the public Hugging Face model repo, cached in /tmp for
+       the life of the function instance (keeps the git repo small when the
+       parts are not shipped)."""
     whole = ONNX_DIR / MODEL_FILE
     if whole.exists():
         return whole.read_bytes()
     parts = sorted(ONNX_DIR.glob(f"{MODEL_FILE}.part*"), key=lambda p: int(p.suffix[5:]))
-    if not parts:
-        raise FileNotFoundError(f"{MODEL_FILE} (or its .part files) not found in {ONNX_DIR}")
-    return b"".join(part.read_bytes() for part in parts)
+    if parts:
+        return b"".join(part.read_bytes() for part in parts)
+    if CACHE_FILE.exists():
+        return CACHE_FILE.read_bytes()
+    import urllib.request
+
+    with urllib.request.urlopen(MODEL_URL, timeout=120) as response:
+        data = response.read()
+    try:
+        CACHE_FILE.write_bytes(data)
+    except OSError:
+        pass  # /tmp may be unavailable; serving from memory still works
+    return data
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 DATA_URL_RE = re.compile(r"^data:(image/[a-zA-Z0-9.+-]+);base64,(.+)$", re.DOTALL)
 

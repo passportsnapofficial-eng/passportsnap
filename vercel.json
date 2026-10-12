@@ -9,31 +9,55 @@
     "api/attribute_model.py": {
       "maxDuration": 60,
       "includeFiles": "services/attribute_detection/onnx/{vision-fp16.onnx.part*,prompts.json}",
-      "excludeFiles": "{public/**,src/**,dist/**,scripts/**,supabase/**,server/**,services/attribute_detection/data/**,services/attribute_detection/onnx/vision.onnx,services/attribute_detection/onnx/vision-fp16.onnx,services/attribute_detection/onnx/vision-int8.onnx,services/eyewear_detection/**,services/image_enhancement/**,services/legacy/**,.venv/**,.venv-data/**,**/*.png,**/*.jpg,**/*.jpeg,**/*.webp,**/*.pdf}"
+      "excludeFiles": "{{public,src,dist,scripts,server,supabase}/**,services/**/data/**,services/attribute_detection/onnx/vision*.onnx,services/{eyewear_detection,image_enhancement,legacy}/**,**/*.{png,jpg,jpeg,webp,pdf}}"
     }
   },
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Frame-Options", "value": "DENY" },
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "X-XSS-Protection", "value": "1; mode=block" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "Permissions-Policy", "value": "camera=self, microphone=(), geolocation=(), interest-cohort=()" },
-        { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" }
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=self, microphone=(), geolocation=(), interest-cohort=()"
+        },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=63072000; includeSubDomains; preload"
+        }
       ]
     },
     {
       "source": "/assets/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
       ]
     },
     {
       "source": "/index.html",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store, max-age=0" }
+        {
+          "key": "Cache-Control",
+          "value": "no-store, max-age=0"
+        }
       ]
     }
   ],
