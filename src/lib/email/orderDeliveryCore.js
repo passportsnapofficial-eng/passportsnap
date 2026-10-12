@@ -15,18 +15,24 @@ function resolveRecipientEmail(payload = {}) {
     .toLowerCase();
 }
 
+function stripWrappingQuotes(value) {
+  const text = String(value || '').trim();
+  const first = text.charAt(0);
+  const last = text.charAt(text.length - 1);
+  if (text.length >= 2 && (first === '"' || first === "'") && first === last) {
+    return text.slice(1, -1).trim();
+  }
+  return text;
+}
+
 function resolveSenderEmail() {
   // Dashboards often store the value with the quote marks the user typed
-  // around it, and Resend rejects '"Name <a@b.c>"' as malformed. Strip one
-  // pair of wrapping quotes so a copy-pasted value still sends.
-  return String(
-    process.env.ORDER_DELIVERY_FROM_EMAIL ||
-      process.env.RESEND_FROM_EMAIL ||
-      '',
-  )
-    .trim()
-    .replace(/^(['"])(.*)$/, '$2')
-    .trim();
+  // around it, and Resend rejects a from field wrapped in quotes as
+  // malformed. Strip one pair of wrapping quotes so a copy-pasted value
+  // still sends.
+  return stripWrappingQuotes(
+    process.env.ORDER_DELIVERY_FROM_EMAIL || process.env.RESEND_FROM_EMAIL || '',
+  );
 }
 
 function getResendApiKey() {
