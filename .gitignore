@@ -60,3 +60,7 @@ build-run-*.png
 
 # Downloaded evaluation data (Open Images crops) - regenerate with prepare_openimages_eval.py
 services/attribute_detection/data/
+
+# Python bytecode
+__pycache__/
+*.pyc

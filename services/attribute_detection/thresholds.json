@@ -1,0 +1,18 @@
+{
+  "glasses": {
+    "present": 0.787,
+    "absent": 0.501
+  },
+  "hat": {
+    "present": 0.742,
+    "absent": 0.375
+  },
+  "head_covering": {
+    "present": 0.72,
+    "absent": 0.356
+  },
+  "face_mask": {
+    "present": 0.646,
+    "absent": 0.479
+  }
+}

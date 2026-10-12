@@ -18,6 +18,7 @@ on its own; "unsure" is the safe default, not "absent".
 from __future__ import annotations
 
 import io
+import math
 import os
 import threading
 from dataclasses import dataclass
@@ -28,71 +29,94 @@ from PIL import Image
 
 MODEL_ID = os.getenv("ATTRIBUTE_MODEL_ID", "google/siglip-base-patch16-224")
 
-# Positive prompts describe the attribute; negative prompts describe its
-# absence. Several phrasings per side make the score robust to wording.
-ATTRIBUTE_PROMPTS: dict[str, dict[str, list[str]]] = {
-    "glasses": {
-        "positive": [
-            "a photo of a person wearing eyeglasses",
-            "a close-up of a face wearing glasses",
-            "a person wearing spectacles with a frame around the eyes",
-            "a person wearing sunglasses",
-        ],
-        "negative": [
-            "a photo of a person not wearing glasses",
-            "a bare face with nothing over the eyes",
-            "a close-up of a face with no eyewear",
-        ],
-    },
-    "hat": {
-        "positive": [
-            "a person wearing a baseball cap",
-            "a person wearing a hat",
-            "a person wearing a knitted beanie",
-            "a person wearing a flat cap",
-            "a person wearing a fedora or brimmed hat",
-        ],
-        "negative": [
-            "a person with uncovered hair and nothing on their head",
-            "a bald person with nothing on their head",
-            "a photo of a person with no hat",
-        ],
-    },
-    "head_covering": {
-        "positive": [
-            "a woman wearing a hijab",
-            "a person wearing a headscarf covering the hair",
-            "a person wearing a turban",
-            "a person wearing a religious head covering",
-        ],
-        "negative": [
-            "a person with uncovered hair and nothing on their head",
-            "a bald person with nothing on their head",
-            "a photo of a person with no head covering",
-        ],
-    },
-    "face_mask": {
-        "positive": [
-            "a person wearing a surgical face mask",
-            "a person wearing a cloth face mask covering the nose and mouth",
-            "a person wearing an N95 respirator mask",
-        ],
-        "negative": [
-            "an uncovered face with the nose and mouth clearly visible",
-            "a photo of a face with no mask",
-        ],
-    },
+# Each attribute is a list of (with-attribute, same-context-without) prompt
+# pairs. Vision-language models are poor at negation ("no glasses") and keen
+# on context words ("close-up of a face"), so the neutral half of every pair
+# repeats the positive half's context exactly, leaving only the attribute to
+# differ. The score is the paired contrast, not an absolute match.
+ATTRIBUTE_PROMPTS: dict[str, list[tuple[str, str]]] = {
+    "glasses": [
+        ("a photo of a person wearing eyeglasses", "a photo of a person"),
+        ("a close-up of a face wearing glasses", "a close-up of a face"),
+        ("a passport photo of someone wearing spectacles", "a passport photo of someone"),
+        ("eyes seen through the lenses of glasses", "eyes"),
+        ("a person wearing sunglasses", "a person"),
+    ],
+    "hat": [
+        ("a person wearing a baseball cap", "a person"),
+        ("a photo of a person wearing a hat", "a photo of a person"),
+        ("a head with a knitted beanie on it", "a head with hair on it"),
+        ("a person wearing a flat cap", "a person"),
+        ("a person wearing a brimmed hat", "a person"),
+    ],
+    "head_covering": [
+        ("a woman wearing a hijab", "a woman"),
+        ("a person wearing a headscarf covering the hair", "a person"),
+        ("a person wearing a turban", "a person"),
+        ("a photo of someone in a religious head covering", "a photo of someone"),
+    ],
+    "face_mask": [
+        ("a person wearing a surgical face mask", "a person"),
+        ("a face with a cloth mask covering the nose and mouth", "a face"),
+        ("a person wearing an N95 respirator", "a person"),
+        ("a passport photo of someone wearing a face mask", "a passport photo of someone"),
+    ],
+}
+
+# Temperature for the paired contrast. SigLIP's own logit scale (~100) would
+# saturate every verdict to 0 or 1 and erase the "unsure" band; this keeps
+# the scores spread so calibration has something to work with.
+CONTRAST_TEMPERATURE = float(os.getenv("ATTRIBUTE_CONTRAST_TEMPERATURE", "20"))
+
+# The app sends the finished passport export, so the face sits in a known
+# place: head roughly the middle 50-70% of the height, eyes just above centre.
+# Scoring a few fixed regions as well as the whole frame gives the model a
+# close look at the eyes for glasses, the crown for headwear, and the nose and
+# mouth for masks - without needing a face detector in this service.
+REGIONS: dict[str, tuple[float, float, float, float]] = {
+    "full": (0.0, 0.0, 1.0, 1.0),
+    "head": (0.05, 0.0, 0.95, 0.62),
+    "face": (0.12, 0.08, 0.88, 0.80),
+    "eyes": (0.18, 0.22, 0.82, 0.58),
+    "lower_face": (0.15, 0.36, 0.85, 0.92),
+}
+ATTRIBUTE_REGIONS: dict[str, list[str]] = {
+    "glasses": ["full", "face", "eyes"],
+    "hat": ["full", "head"],
+    "head_covering": ["full", "head"],
+    "face_mask": ["full", "face", "lower_face"],
 }
 
 # Three-state operating points. "present" must be precise (a false block costs
 # a sale); "absent" must be conservative (a false clear costs a rejected
 # passport). Everything in between is a question for the customer.
-DEFAULT_THRESHOLDS: dict[str, dict[str, float]] = {
+_FALLBACK_THRESHOLDS: dict[str, dict[str, float]] = {
     "glasses": {"present": 0.70, "absent": 0.35},
     "hat": {"present": 0.70, "absent": 0.35},
     "head_covering": {"present": 0.70, "absent": 0.35},
     "face_mask": {"present": 0.70, "absent": 0.35},
 }
+
+
+def _load_thresholds() -> dict[str, dict[str, float]]:
+    """Calibrated values live in thresholds.json next to this file (written by
+    calibrate_thresholds.py). ATTRIBUTE_THRESHOLDS_PATH overrides the location.
+    Missing file -> the conservative fallbacks above, which ask a lot."""
+    import json
+    from pathlib import Path
+
+    path = Path(os.getenv("ATTRIBUTE_THRESHOLDS_PATH") or Path(__file__).with_name("thresholds.json"))
+    merged = {key: dict(value) for key, value in _FALLBACK_THRESHOLDS.items()}
+    if path.exists():
+        try:
+            for attribute, values in json.loads(path.read_text(encoding="utf-8")).items():
+                merged.setdefault(attribute, {}).update({k: float(v) for k, v in values.items()})
+        except (OSError, ValueError):
+            pass
+    return merged
+
+
+DEFAULT_THRESHOLDS: dict[str, dict[str, float]] = _load_thresholds()
 
 
 @dataclass(frozen=True)
@@ -102,6 +126,7 @@ class AttributeResult:
     positive: float
     negative: float
     state: str  # present | absent | unsure
+    region: str = "full"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -110,7 +135,22 @@ class AttributeResult:
             "positive": round(self.positive, 4),
             "negative": round(self.negative, 4),
             "state": self.state,
+            "region": self.region,
         }
+
+
+def _as_tensor(output: Any) -> torch.Tensor:
+    """get_*_features returns a bare tensor on some Transformers versions and
+    an output object on others; accept both."""
+    if torch.is_tensor(output):
+        return output
+    for name in ("pooler_output", "image_embeds", "text_embeds", "last_hidden_state"):
+        value = getattr(output, name, None)
+        if torch.is_tensor(value):
+            return value
+    if isinstance(output, (tuple, list)) and output and torch.is_tensor(output[0]):
+        return output[0]
+    raise TypeError(f"Unexpected feature output type: {type(output).__name__}")
 
 
 def resolve_state(score: float, thresholds: dict[str, float]) -> str:
@@ -138,14 +178,15 @@ class AttributeDetector:
         self.model = AutoModel.from_pretrained(model_id).to(self.device).eval()
         self._lock = threading.Lock()
 
-        # Text embeddings never change, so compute them once.
-        self._prompt_index: list[tuple[str, str]] = []
+        # Text embeddings never change, so compute them once. Pairs are laid
+        # out as consecutive rows: 2k = with attribute, 2k+1 = same context
+        # without it.
+        self._pair_index: list[tuple[str, int]] = []
         prompts: list[str] = []
-        for attribute, sides in ATTRIBUTE_PROMPTS.items():
-            for side in ("positive", "negative"):
-                for prompt in sides[side]:
-                    self._prompt_index.append((attribute, side))
-                    prompts.append(prompt)
+        for attribute, pairs in ATTRIBUTE_PROMPTS.items():
+            for pair_number, (positive, neutral) in enumerate(pairs):
+                self._pair_index.append((attribute, pair_number))
+                prompts.extend([positive, neutral])
         with torch.no_grad():
             text_inputs = self.processor(
                 text=prompts,
@@ -153,48 +194,84 @@ class AttributeDetector:
                 max_length=64,
                 return_tensors="pt",
             ).to(self.device)
-            text_embeds = self.model.get_text_features(**text_inputs)
+            text_embeds = _as_tensor(self.model.get_text_features(**text_inputs))
             self._text_embeds = text_embeds / text_embeds.norm(dim=-1, keepdim=True)
-        self._logit_scale = self.model.logit_scale.exp().item()
-        logit_bias = getattr(self.model, "logit_bias", None)
-        self._logit_bias = float(logit_bias.item()) if logit_bias is not None else 0.0
 
     @staticmethod
     def load_image(data: bytes) -> Image.Image:
         return Image.open(io.BytesIO(data)).convert("RGB")
 
     def _probabilities(self, image: Image.Image) -> torch.Tensor:
+        """Cosine similarity of the image to every prompt, in pair order."""
         with torch.no_grad():
             pixel_inputs = self.processor(images=image, return_tensors="pt").to(self.device)
-            image_embeds = self.model.get_image_features(**pixel_inputs)
+            image_embeds = _as_tensor(self.model.get_image_features(**pixel_inputs))
             image_embeds = image_embeds / image_embeds.norm(dim=-1, keepdim=True)
-            logits = image_embeds @ self._text_embeds.T * self._logit_scale + self._logit_bias
-            # SigLIP is trained with a sigmoid loss, so each text is scored
-            # independently rather than softmaxed against the others.
-            return torch.sigmoid(logits)[0].cpu()
+            return (image_embeds @ self._text_embeds.T)[0].cpu()
+
+    @staticmethod
+    def _crop(image: Image.Image, region: tuple[float, float, float, float]) -> Image.Image:
+        width, height = image.size
+        left, top, right, bottom = region
+        return image.crop((int(left * width), int(top * height), int(right * width), int(bottom * height)))
+
+    def _scores_for_region(self, similarities: torch.Tensor) -> dict[str, dict[str, float]]:
+        """Best paired contrast per attribute for one region.
+
+        For each pair the score is sigmoid(T * (sim_with - sim_without)):
+        0.5 means the attribute words added nothing, above means the image
+        matches better with them, below means worse. The strongest pair wins
+        so a cap scored by the "beanie" pair is not dragged down by "fedora".
+        """
+        values = similarities.tolist()
+        best: dict[str, dict[str, float]] = {}
+        for row, (attribute, _pair_number) in enumerate(self._pair_index):
+            with_attribute = values[2 * row]
+            without = values[2 * row + 1]
+            contrast = 1.0 / (1.0 + math.exp(-CONTRAST_TEMPERATURE * (with_attribute - without)))
+            current = best.get(attribute)
+            if current is None or contrast > current["score"]:
+                best[attribute] = {"score": contrast, "positive": with_attribute, "negative": without}
+        return best
 
     def detect(self, image: Image.Image) -> dict[str, AttributeResult]:
+        needed = sorted({name for names in ATTRIBUTE_REGIONS.values() for name in names})
         with self._lock:
-            probabilities = self._probabilities(image)
+            per_region = {
+                name: self._scores_for_region(self._probabilities(self._crop(image, REGIONS[name])))
+                for name in needed
+            }
 
-        best: dict[str, dict[str, float]] = {}
-        for (attribute, side), probability in zip(self._prompt_index, probabilities.tolist()):
-            current = best.setdefault(attribute, {"positive": 0.0, "negative": 0.0})
-            current[side] = max(current[side], probability)
+        chosen: dict[str, dict[str, float | str]] = {}
+        for attribute, region_names in ATTRIBUTE_REGIONS.items():
+            best = {"score": -1.0, "positive": 0.0, "negative": 0.0, "region": ""}
+            for name in region_names:
+                sides = per_region[name][attribute]
+                # The region that sees the attribute most clearly wins, so a
+                # miss on the full frame cannot hide a hit on the eyes.
+                if sides["score"] > best["score"]:
+                    best = {**sides, "region": name}
+            chosen[attribute] = best
+
+        # A turban or hijab matches "a person wearing a hat" well enough to be
+        # called one: 4 in 10 head coverings were flagged as hats before this.
+        # Hats are blocked and religious coverings are allowed, so the hat
+        # verdict must also beat the head-covering description of the same
+        # region. If the covering description fits better, it is not a hat.
+        hat = chosen["hat"]
+        cover_sim = per_region[hat["region"]]["head_covering"]["positive"]
+        hat_vs_cover = 1.0 / (1.0 + math.exp(-CONTRAST_TEMPERATURE * (hat["positive"] - cover_sim)))
+        hat["score"] = min(hat["score"], hat_vs_cover)
 
         results: dict[str, AttributeResult] = {}
-        for attribute, sides in best.items():
-            positive = sides["positive"]
-            negative = sides["negative"]
-            # Absolute sigmoid values run low; the contrast between the best
-            # positive and the best negative prompt is what separates classes.
-            score = positive / (positive + negative + 1e-9)
+        for attribute, best in chosen.items():
             results[attribute] = AttributeResult(
                 attribute=attribute,
-                score=score,
-                positive=positive,
-                negative=negative,
-                state=resolve_state(score, self.thresholds[attribute]),
+                score=float(best["score"]),
+                positive=float(best["positive"]),
+                negative=float(best["negative"]),
+                state=resolve_state(float(best["score"]), self.thresholds[attribute]),
+                region=str(best["region"]),
             )
         return results
 
