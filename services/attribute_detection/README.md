@@ -64,11 +64,33 @@ Response:
 }
 ```
 
-## Deploy
+## Deploy for free: Hugging Face Spaces (recommended)
 
-`Dockerfile` builds a CPU-only image with the weights baked in, so cold
-starts do not depend on the Hub. Any container host works (Railway, Render,
-Fly.io). Give it at least 2 GB of memory. Health check: `GET /health`.
+The free **CPU Basic** Space (2 vCPU, 16 GB RAM, no card) runs this service
+comfortably. `hf-space/` holds a Space-specific Dockerfile and README.
+
+1. Create a free account at huggingface.co and a **write** token
+   (Settings -> Access Tokens).
+2. `set HF_TOKEN=hf_...` then
+   `.venv/Scripts/python services/attribute_detection/hf-space/deploy_space.py --space <you>/passportsnap-attributes`
+3. Wait for the build (about 10 minutes the first time; the Logs tab shows it).
+4. In Vercel set `ATTRIBUTE_SERVICE_URL` to `https://<you>-passportsnap-attributes.hf.space/detect`.
+   The Space is private by default, so also set `ATTRIBUTE_SERVICE_TOKEN` to an
+   HF **read** token. Redeploy.
+5. Free Spaces pause after 48 h without traffic. The GitHub Action
+   `.github/workflows/keep-attribute-service-awake.yml` pings `/health` every
+   6 hours; set the repository variable `ATTRIBUTE_SERVICE_HEALTH_URL` (and the
+   secret `ATTRIBUTE_SERVICE_TOKEN` for a private Space) to enable it.
+
+If the Space is ever asleep when a customer arrives, the app's 20-second
+proxy timeout trips, every attribute reads `unsure`, and the customer is
+asked to confirm - a slow answer never becomes a wrong one.
+
+## Deploy elsewhere
+
+`Dockerfile` (this directory) builds a CPU-only image with the weights baked
+in. Any container host with 2 GB of memory works (Railway, Render paid tiers,
+Fly.io, Cloud Run). Health check: `GET /health`.
 
 ## Measure before trusting it
 

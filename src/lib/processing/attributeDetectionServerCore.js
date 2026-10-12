@@ -51,9 +51,14 @@ export async function detectPhotoAttributes({ dataUrl, timeoutMs = DEFAULT_TIMEO
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
+    // A private Hugging Face Space needs a bearer token on every request.
+    const token = String(process.env.ATTRIBUTE_SERVICE_TOKEN || '').trim();
     const response = await fetch(getAttributeServiceUrl(), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({ dataUrl: validated }),
       signal: controller.signal,
     });
