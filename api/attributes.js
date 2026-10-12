@@ -1,11 +1,26 @@
-import { detectPhotoAttributes } from '../src/lib/processing/attributeDetectionServerCore.js';
+import { detectPhotoAttributes, warmAttributeService } from '../src/lib/processing/attributeDetectionServerCore.js';
 import { sendError, setApiHeaders } from './_helpers.js';
 
 export default async function handler(request, response) {
-  setApiHeaders(response, request, 'POST,OPTIONS');
+  setApiHeaders(response, request, 'GET,POST,OPTIONS');
 
   if (request.method === 'OPTIONS') {
     response.status(204).end();
+    return;
+  }
+
+  // GET warms the model function so the verdict after capture does not pay
+  // the cold start (model download + load). The app calls this as soon as
+  // the customer starts taking a photo.
+  if (request.method === 'GET') {
+    const host = String(request.headers['x-forwarded-host'] || request.headers.host || '').trim();
+    const proto = String(request.headers['x-forwarded-proto'] || 'https').split(',')[0].trim() || 'https';
+    try {
+      const result = await warmAttributeService({ selfOrigin: host ? `${proto}://${host}` : '' });
+      response.status(200).json(result);
+    } catch (error) {
+      response.status(200).json({ warm: false, message: error?.message || 'warm-up skipped' });
+    }
     return;
   }
 

@@ -23,7 +23,7 @@ import {
 } from '../src/lib/processing/imageEnhancementServerCore.js';
 import { sendOrderDeliveryEmail } from '../src/lib/email/orderDeliveryCore.js';
 import { initializeTransaction, verifyTransaction } from '../src/lib/payments/stripeServerCore.js';
-import { detectPhotoAttributes } from '../src/lib/processing/attributeDetectionServerCore.js';
+import { detectPhotoAttributes, warmAttributeService } from '../src/lib/processing/attributeDetectionServerCore.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const rootDir = resolve(__dirname, '..');
@@ -354,6 +354,11 @@ const server = createServer(async (request, response) => {
       const sessionId = requestUrl.searchParams.get('sessionId');
       const result = await verifyTransaction(sessionId);
       sendJson(response, 200, result, requestOrigin);
+      return;
+    }
+
+    if (request.method === 'GET' && requestUrl.pathname === '/api/attributes') {
+      sendJson(response, 200, await warmAttributeService(), requestOrigin);
       return;
     }
 

@@ -185,9 +185,9 @@ export function ResultView({
                       : `${pendingConfirmations.length} things to confirm before checkout`}
                   </div>
                   <p className="mt-2 text-sm leading-6 text-amber-900/80">
-                    Our automatic check could not reach a verdict on
-                    {pendingConfirmations.length === 1 ? ' this point' : ' these points'}. Applications
-                    get rejected for them, so please confirm yourself.
+                    This is not a detection. Our automatic check could not rule
+                    {pendingConfirmations.length === 1 ? ' this' : ' these'} out from your photo, and
+                    applications get rejected for them, so please confirm yourself.
                   </p>
                 </div>
               </div>

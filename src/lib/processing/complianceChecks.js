@@ -396,19 +396,30 @@ export function buildComplianceChecks(processed, preset, documentType = null) {
     // Religious head coverings are permitted, so this never blocks. It exists
     // so the result says what was seen and reminds the customer of the one
     // condition that applies: the full face must stay visible.
+    // When the model answered, its verdict is the only voice here. The browser
+    // heuristic's "possible head covering" fired on many bare heads and read
+    // to customers as "it says I'm wearing headgear".
     createInfoCheck(
       'Headwear',
       'hijabDetection',
       headCoveringDetected
         ? 'Religious head covering detected'
-        : headwear.possibleHeadCovering
-          ? 'Possible head covering detected'
-          : 'No religious head covering detected',
+        : attributeState('head_covering') === 'absent'
+          ? 'No religious head covering detected'
+          : attributeDetection?.available
+            ? 'Religious head covering: allowed either way'
+            : headwear.possibleHeadCovering
+              ? 'Possible head covering detected'
+              : 'No religious head covering detected',
       headCoveringDetected
         ? 'Religious head coverings are allowed. Keep the full face visible from the bottom of the chin to the top of the forehead.'
-        : headwear.possibleHeadCovering
-          ? 'Please confirm whether this is religious headwear or a hat; the automated result is intentionally conservative.'
-          : 'No religious head covering was identified by the automated check.',
+        : attributeState('head_covering') === 'absent'
+          ? 'No religious head covering was identified.'
+          : attributeDetection?.available
+            ? 'Religious head coverings are permitted, so this never blocks a photo. If you wear one, keep the full face visible.'
+            : headwear.possibleHeadCovering
+              ? 'Please confirm whether this is religious headwear or a hat; the automated result is intentionally conservative.'
+              : 'No religious head covering was identified by the automated check.',
     ),
     maskState === 'present'
       ? createPassedCheck('Face & Position', 'maskFree', 'No face mask detected', 'Face mask detected', false, maskHelp)

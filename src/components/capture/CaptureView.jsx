@@ -14,6 +14,7 @@ import {
 } from '../../lib/processing/reviewTransform';
 import { FlowShell } from '../flow/FlowShell';
 import { HeadGuideOverlay } from './HeadGuideOverlay';
+import { warmAttributeDetection } from '../../lib/processing/attributeDetectionClient';
 
 const MAX_UPLOAD_LANDSCAPE_RATIO = 1.05;
 const MAX_REVIEW_SCALE = 1.8;
@@ -129,6 +130,12 @@ export function CaptureView({
   const [cameraError, setCameraError] = useState('');
   const [draftImageMetrics, setDraftImageMetrics] = useState(null);
   const nativePhoneCamera = shouldUseNativePhoneCamera();
+
+  // Wake the server-side glasses/hat/mask model now, while the customer is
+  // still framing, so the verdict after capture does not pay a cold start.
+  useEffect(() => {
+    warmAttributeDetection();
+  }, []);
   const targetAspectRatio = selectedPreset.outputWidth / selectedPreset.outputHeight;
   const reviewAdjustments = normalizeReviewAdjustments(draftPhotoAdjustments);
   const reviewLayout = draftImageMetrics

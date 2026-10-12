@@ -16,6 +16,16 @@ function unavailable(reason) {
   };
 }
 
+// Fire-and-forget: wakes the model while the customer is still framing their
+// photo so the verdict after capture does not pay a cold start.
+export function warmAttributeDetection() {
+  try {
+    fetch('/api/attributes', { method: 'GET', keepalive: true }).catch(() => {});
+  } catch {
+    // Warm-up is an optimisation only.
+  }
+}
+
 // Asks the server-side model whether the finished photo shows glasses, a hat,
 // a religious head covering, or a face mask. Resolves to three-state verdicts
 // per attribute; never rejects, so a network problem cannot break processing.

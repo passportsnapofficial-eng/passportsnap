@@ -48,6 +48,33 @@ function validateDataUrl(dataUrl) {
   return value;
 }
 
+// Pings the model's health endpoint so a later verdict request finds a warm
+// instance. Best effort: a failure here is reported, never thrown, because the
+// verdict path already fails closed on its own.
+export async function warmAttributeService({ selfOrigin = '', timeoutMs = 50000 } = {}) {
+  if (!isAttributeServiceConfigured(selfOrigin)) {
+    return { warm: false, message: 'Attribute detection service is not configured.' };
+  }
+  const healthUrl = getAttributeServiceUrl(selfOrigin).replace(/\/detect\/?$/, '/health');
+  const token = String(process.env.ATTRIBUTE_SERVICE_TOKEN || '').trim();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const started = Date.now();
+  try {
+    const response = await fetch(healthUrl, {
+      method: 'GET',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => null);
+    return { warm: Boolean(response.ok && payload?.ok), ms: Date.now() - started, model: payload?.model || '' };
+  } catch (error) {
+    return { warm: false, ms: Date.now() - started, message: error instanceof Error ? error.message : 'warm-up failed' };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 // Resolves to the service's three-state verdicts. Any failure - no service
 // configured, timeout, bad status - surfaces as statusCode 503 so the client
 // can treat every attribute as "unsure" and fall back to asking the customer.
