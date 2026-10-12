@@ -15,7 +15,14 @@ export default async function handler(request, response) {
   }
 
   try {
-    const result = await detectPhotoAttributes({ dataUrl: request.body?.dataUrl });
+    // The bundled Python model lives in this same deployment; reach it through
+    // the host the customer used so production and previews each hit their own.
+    const host = String(request.headers['x-forwarded-host'] || request.headers.host || '').trim();
+    const proto = String(request.headers['x-forwarded-proto'] || 'https').split(',')[0].trim() || 'https';
+    const result = await detectPhotoAttributes({
+      dataUrl: request.body?.dataUrl,
+      selfOrigin: host ? `${proto}://${host}` : '',
+    });
     response.status(200).json(result);
   } catch (error) {
     // 503 is the deliberate "service unavailable" signal the client fails

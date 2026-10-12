@@ -5,6 +5,11 @@
   "functions": {
     "api/**/*.js": {
       "maxDuration": 30
+    },
+    "api/attribute_model.py": {
+      "maxDuration": 60,
+      "includeFiles": "services/attribute_detection/onnx/{vision-fp16.onnx.part*,prompts.json}",
+      "excludeFiles": "{public/**,src/**,dist/**,scripts/**,supabase/**,server/**,services/attribute_detection/data/**,services/attribute_detection/onnx/vision.onnx,services/attribute_detection/onnx/vision-fp16.onnx,services/attribute_detection/onnx/vision-int8.onnx,services/eyewear_detection/**,services/image_enhancement/**,services/legacy/**,.venv/**,.venv-data/**,**/*.png,**/*.jpg,**/*.jpeg,**/*.webp,**/*.pdf}"
     }
   },
   "headers": [

@@ -64,3 +64,8 @@ services/attribute_detection/data/
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Large ONNX exports: only the int8 model ships (committed); regenerate the rest with export_onnx.py / shrink_onnx.py
+services/attribute_detection/onnx/vision.onnx
+services/attribute_detection/onnx/vision-fp16.onnx
+services/attribute_detection/onnx/vision-int8.onnx

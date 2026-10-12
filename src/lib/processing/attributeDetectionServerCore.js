@@ -14,12 +14,24 @@ function createHttpError(message, statusCode) {
   return error;
 }
 
-export function getAttributeServiceUrl() {
-  return String(process.env.ATTRIBUTE_SERVICE_URL || DEFAULT_SERVICE_URL).trim();
+// Resolution order: an explicit ATTRIBUTE_SERVICE_URL (external host), then
+// the Python function that ships inside this same deployment
+// (api/attribute_model.py) reached through the deployment's own origin, so a
+// fresh Vercel project needs no configuration at all to get verdicts.
+export function getAttributeServiceUrl(selfOrigin = '') {
+  const explicit = String(process.env.ATTRIBUTE_SERVICE_URL || '').trim();
+  if (explicit) {
+    return explicit;
+  }
+  const origin = String(selfOrigin || '').trim().replace(/\/+$/, '');
+  if (origin && process.env.VERCEL) {
+    return `${origin}/api/attribute_model`;
+  }
+  return DEFAULT_SERVICE_URL;
 }
 
-export function isAttributeServiceConfigured() {
-  return Boolean(String(process.env.ATTRIBUTE_SERVICE_URL || '').trim());
+export function isAttributeServiceConfigured(selfOrigin = '') {
+  return Boolean(String(process.env.ATTRIBUTE_SERVICE_URL || '').trim()) || Boolean(selfOrigin && process.env.VERCEL);
 }
 
 function validateDataUrl(dataUrl) {
@@ -40,10 +52,10 @@ function validateDataUrl(dataUrl) {
 // configured, timeout, bad status - surfaces as statusCode 503 so the client
 // can treat every attribute as "unsure" and fall back to asking the customer.
 // The service being down must never read as "nothing detected".
-export async function detectPhotoAttributes({ dataUrl, timeoutMs = DEFAULT_TIMEOUT_MS }) {
+export async function detectPhotoAttributes({ dataUrl, timeoutMs = DEFAULT_TIMEOUT_MS, selfOrigin = '' }) {
   const validated = validateDataUrl(dataUrl);
 
-  if (!isAttributeServiceConfigured()) {
+  if (!isAttributeServiceConfigured(selfOrigin)) {
     throw createHttpError('Attribute detection service is not configured.', 503);
   }
 
@@ -53,7 +65,7 @@ export async function detectPhotoAttributes({ dataUrl, timeoutMs = DEFAULT_TIMEO
   try {
     // A private Hugging Face Space needs a bearer token on every request.
     const token = String(process.env.ATTRIBUTE_SERVICE_TOKEN || '').trim();
-    const response = await fetch(getAttributeServiceUrl(), {
+    const response = await fetch(getAttributeServiceUrl(selfOrigin), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

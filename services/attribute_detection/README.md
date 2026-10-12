@@ -64,10 +64,37 @@ Response:
 }
 ```
 
-## Deploy for free: Hugging Face Spaces (recommended)
+## Deploy for free: inside Vercel (recommended, zero configuration)
 
-The free **CPU Basic** Space (2 vCPU, 16 GB RAM, no card) runs this service
-comfortably. `hf-space/` holds a Space-specific Dockerfile and README.
+The same verdicts ship as a Python Vercel Function, `api/attribute_model.py`,
+in this repository. Hobby-plan functions allow 2 GB of memory, 300 s and a
+500 MB Python bundle, which fits an fp16 ONNX export of the vision tower
+(187 MB) plus ONNX Runtime - PyTorch would not fit. Nothing to host, no
+card, no sleeping container, and `api/attributes.js` reaches it through the
+deployment's own origin, so **no environment variable is required**. Set
+`ATTRIBUTE_SERVICE_URL` only to point at an external host instead.
+
+Regenerating the bundled model after changing prompts or thresholds:
+
+```bash
+.venv/Scripts/python -m services.attribute_detection.export_onnx --out services/attribute_detection/onnx
+.venv/Scripts/python -m services.attribute_detection.shrink_onnx --onnx-dir services/attribute_detection/onnx
+.venv/Scripts/python -m services.attribute_detection.split_model --onnx-dir services/attribute_detection/onnx
+```
+
+`export_onnx.py` also pre-computes the prompt embeddings into `prompts.json`
+(so the function needs no text model). `shrink_onnx.py` measures the fp16 and
+int8 variants against fp32 on the fixtures: fp16 agrees to cosine 1.00000
+with score drift 0.0006 and is what ships; int8 drifted 0.17 and is not used.
+`split_model.py` cuts the 187 MB file into two parts under GitHub's 100 MiB
+file limit; the function joins them at start-up and checks nothing else.
+
+## Hugging Face Spaces (no longer free for Docker)
+
+`hf-space/` holds a Space Dockerfile and deploy script, kept for anyone with a
+PRO subscription. As of October 2026 Hugging Face requires PRO to run Docker
+Spaces on CPU Basic ("Static Spaces are free for everyone, but hosting Gradio
+and Docker Spaces on free cpu-basic requires a PRO subscription").
 
 1. Create a free account at huggingface.co and a **write** token
    (Settings -> Access Tokens).
