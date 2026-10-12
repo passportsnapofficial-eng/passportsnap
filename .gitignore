@@ -69,3 +69,4 @@ __pycache__/
 services/attribute_detection/onnx/vision.onnx
 services/attribute_detection/onnx/vision-fp16.onnx
 services/attribute_detection/onnx/vision-int8.onnx
+services/attribute_detection/onnx/vision-fp16.onnx.part*

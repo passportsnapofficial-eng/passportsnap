@@ -8,8 +8,8 @@
     },
     "api/attribute_model.py": {
       "maxDuration": 60,
-      "includeFiles": "services/attribute_detection/onnx/{vision-fp16.onnx.part*,prompts.json}",
-      "excludeFiles": "{{public,src,dist,scripts,server,supabase}/**,services/**/data/**,services/attribute_detection/onnx/vision*.onnx,services/{eyewear_detection,image_enhancement,legacy}/**,**/*.{png,jpg,jpeg,webp,pdf}}"
+      "includeFiles": "services/attribute_detection/onnx/prompts.json",
+      "excludeFiles": "{{public,src,dist,scripts,server,supabase,.github}/**,services/**/data/**,services/attribute_detection/onnx/vision*,services/{eyewear_detection,image_enhancement,legacy}/**,**/*.{png,jpg,jpeg,webp,pdf,md}}"
     }
   },
   "headers": [

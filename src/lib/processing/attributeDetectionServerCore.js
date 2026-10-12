@@ -4,7 +4,7 @@ import process from 'node:process';
 // services/attribute_detection). This proxy keeps its URL private and gives
 // the browser one same-origin endpoint to call.
 const DEFAULT_SERVICE_URL = 'http://127.0.0.1:8789/detect';
-const DEFAULT_TIMEOUT_MS = 20000;
+const DEFAULT_TIMEOUT_MS = 23000;
 const MAX_DATA_URL_LENGTH = 6 * 1024 * 1024;
 const DATA_URL_RE = /^data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+$/;
 
