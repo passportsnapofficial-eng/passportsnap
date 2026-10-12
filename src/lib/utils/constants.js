@@ -144,6 +144,12 @@ export const PROCESSING_STEPS = [
     durationMs: 260,
   },
   {
+    key: 'detect-attributes',
+    title: 'Checking for glasses, hats and masks',
+    description: 'Looking for anything that must come off.',
+    durationMs: 120,
+  },
+  {
     key: 'finalize-result',
     title: 'Wrapping up',
     description: 'Your photo is almost ready.',

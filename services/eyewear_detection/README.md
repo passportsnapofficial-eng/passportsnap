@@ -1,5 +1,14 @@
 # Eyewear Detection Training
 
+> **Commercial-use warning.** PassportSnap is a paid product, so any model that
+> ships must be trainable on commercially-licensed data. CelebA, CelebAMask-HQ
+> and WIDER FACE are **not** usable here: CelebA's agreement bars commercial
+> exploitation of the images *and of derived data*, which covers a trained
+> model, and WIDER FACE is CC BY-NC-ND. `prepare_celeba_eyewear_dataset.py` is
+> kept only for non-commercial research comparison. **Do not ship a model
+> trained with it.** Use a commercially-licensed source instead - see
+> "Commercially-licensed sources" below.
+
 This repo currently ships a browser-side passport validator. The existing glasses check was originally heuristic. The runtime supports an optional learned classifier configured with `VITE_EYEWEAR_CLASSIFIER_MODEL_PATH`. The conventional public path is:
 
 `public/models/eyewear_classifier.tflite`
@@ -32,11 +41,34 @@ Read the upstream licenses before training or shipping any model derived from th
 - Face detection and landmarks:
   Keep MediaPipe for now, but evaluate it on WIDER FACE and UFDD before deciding whether to replace it with a custom detector such as RetinaFace.
 - Eyewear detection:
-  Train a dedicated binary classifier on CelebA `Eyeglasses`, then calibrate it against passport-style images and hard negatives.
+  Train a dedicated binary classifier on a commercially-licensed source (see
+  below), then calibrate it against passport-style images and hard negatives.
+  Do not train the shipped model on CelebA; see the warning at the top.
 - Background / blur / lighting:
   These are application-specific quality checks. They need a passport-photo-specific validation set, not only generic face datasets.
 
-## Prepare CelebA for training
+## Commercially-licensed sources
+
+Use these for anything that ships:
+
+- Open Images V7: https://storage.googleapis.com/openimages/web/factsfigures_v7.html
+  Annotations are CC BY 4.0 and the images are listed as CC BY 2.0, so both are
+  usable commercially with attribution. Carries hat- and glasses-family classes.
+- Roboflow Universe projects published under CC BY 4.0. Check each project
+  individually; a dataset licence does not always cover trained weights.
+
+`train_eyewear_classifier.py` is dataset-agnostic - it calls
+`image_classifier.Dataset.from_folder`. Any prep script only has to emit this
+layout, which is also what the runtime's label matching expects:
+
+- `train/with_glasses`, `train/without_glasses`
+- `validation/with_glasses`, `validation/without_glasses`
+- `test/with_glasses`, `test/without_glasses`
+
+So swapping data sources means writing a new `prepare_*` script with the same
+output contract. The trainer and the browser runtime stay unchanged.
+
+## Prepare CelebA for training (non-commercial research only)
 
 1. Download CelebA images and annotation files from the official site.
 2. Run:

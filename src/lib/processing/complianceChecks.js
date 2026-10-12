@@ -32,6 +32,10 @@ function createCheck(group, key, labels, status, helpText = '', noteText = '', o
     noteText,
     recoverable: Boolean(options.recoverable),
     recoveryType: options.recoveryType || null,
+    // A check the automated pass could not decide. The customer has to answer
+    // it themselves before the photo can be sold.
+    requiresConfirmation: Boolean(options.requiresConfirmation),
+    confirmLabel: options.confirmLabel || '',
   };
 }
 
@@ -180,6 +184,7 @@ const FRIENDLY_REJECTION_REASON_OVERRIDES = {
   eyesLevel: 'Eyes not level',
   eyewearFree: 'Remove glasses',
   hatFree: 'Remove hat',
+  maskFree: 'Remove face mask',
   neutralExpression: 'Keep a neutral expression',
   mouthClosed: 'Keep your mouth closed',
   backgroundPlain: 'Background is too busy',
@@ -263,6 +268,11 @@ export function buildComplianceChecks(processed, preset, documentType = null) {
   const background = processed.analysis.background;
   const eyewear = processed.analysis.eyewear || {};
   const headwear = processed.analysis.headwear || {};
+  // Three-state verdicts from the server model (see
+  // attributeDetectionClient.js). Anything it did not settle is "unsure", and
+  // unsure can only ever lead to a customer confirmation, never to a clear.
+  const attributeDetection = processed.analysis.attributes || null;
+  const attributeState = (key) => attributeDetection?.attributes?.[key]?.state || 'unsure';
   const lighting = processed.analysis.lighting;
   const sharpness = processed.analysis.sharpness;
   const framing = processed.analysis.framing;
@@ -304,11 +314,19 @@ export function buildComplianceChecks(processed, preset, documentType = null) {
   );
   const backgroundAdvisoryOnly = allowBackgroundCleanup && (backgroundRemovalAttempted || backgroundRemovalApplied);
   const eyewearClassifierReady = Boolean(eyewear.classifierReady);
-  // Either the analysis never ran, or it ran and could not decide.
+  const modelGlasses = attributeState('glasses');
+  const wearingGlasses = Boolean(eyewear.wearingGlasses) || modelGlasses === 'present';
+  const glassesCleared = !wearingGlasses && modelGlasses === 'absent';
+  // Undecided when neither the browser heuristic nor the server model reached
+  // a confident verdict. The heuristic saying "no glasses" is not enough on
+  // its own: it measured 0 of 3 on light skin in the labelled fixtures.
   const eyewearUndecided =
-    eyewear.supported === false || (Boolean(eyewear.glassesAbstain) && !eyewear.wearingGlasses);
+    !wearingGlasses &&
+    !glassesCleared &&
+    (eyewear.supported === false || Boolean(eyewear.glassesAbstain) || modelGlasses === 'unsure');
   const highConfidenceEyewear =
-    Boolean(eyewear.wearingGlasses) &&
+    modelGlasses === 'present' ||
+    (Boolean(eyewear.wearingGlasses) &&
     (
       Boolean(eyewear.heuristicHighConfidence) ||
       (
@@ -322,7 +340,7 @@ export function buildComplianceChecks(processed, preset, documentType = null) {
           )
         )
       )
-    );
+    ));
   const portraitSharpnessVariance = Number(sharpness?.portraitLaplacianVariance || 0);
   const portraitSharpnessEdgeDensity = Number(sharpness?.portraitEdgeDensity || 0);
   // These heuristics are useful guidance, but too noisy to hard-fail photos that are otherwise valid.
@@ -350,39 +368,62 @@ export function buildComplianceChecks(processed, preset, documentType = null) {
   const acceptedBackgroundLabel = formatToneList(allowedBackgroundTones);
   const checks = [];
 
+  const hatDetected = Boolean(headwear.hatDetected) || attributeState('hat') === 'present';
+  const hatCleared = !hatDetected && attributeState('hat') === 'absent';
+  const headCoveringDetected = Boolean(headwear.hijabDetected) || attributeState('head_covering') === 'present';
+  const maskState = attributeState('face_mask');
+  const hatHelp = 'Remove hats, caps, and fashion headwear. Religious head coverings may remain when the full face is visible.';
+  const maskHelp = 'Remove any face mask or covering so your nose and mouth are fully visible.';
+
   checks.push(
-    // Only ever assert the failing side. The automatic headwear signals do not
-    // separate a dark cap from dark hair, so clearing a photo on their say-so
-    // would be guessing; ask the person to confirm instead.
-    headwear.hatDetected
-      ? createPassedCheck(
-          'Headwear',
-          'hatFree',
-          'No hat detected',
-          'Hat detected',
-          false,
-          'Remove hats, caps, and fashion headwear. Religious head coverings may remain when the full face is visible.',
-        )
-      : createInfoCheck(
-          'Headwear',
-          'hatFree',
-          "We couldn't check for a hat",
-          'The automatic headwear check is not reliable enough to clear this photo on its own, so please confirm it yourself. Remove hats, caps and fashion headwear. Religious head coverings may stay on when the full face is visible.',
-        ),
+    // The browser heuristics only ever assert the failing side: they cannot
+    // separate a dark cap from dark hair. The server model can clear a photo.
+    // Without a confident verdict from either, ask the person to confirm.
+    hatDetected
+      ? createPassedCheck('Headwear', 'hatFree', 'No hat detected', 'Hat detected', false, hatHelp)
+      : hatCleared
+        ? createPassedCheck('Headwear', 'hatFree', 'No hat detected', 'Hat detected', true, hatHelp)
+        : createInfoCheck(
+            'Headwear',
+            'hatFree',
+            'Confirm you are not wearing a hat',
+            'The automatic headwear check could not clear this photo on its own, so please confirm it yourself. Remove hats, caps and fashion headwear. Religious head coverings may stay on when the full face is visible.',
+            {
+              requiresConfirmation: true,
+              confirmLabel: 'I am not wearing a hat, cap, or other fashion headwear.',
+            },
+          ),
+    // Religious head coverings are permitted, so this never blocks. It exists
+    // so the result says what was seen and reminds the customer of the one
+    // condition that applies: the full face must stay visible.
     createInfoCheck(
       'Headwear',
       'hijabDetection',
-      headwear.hijabDetected
+      headCoveringDetected
         ? 'Religious head covering detected'
         : headwear.possibleHeadCovering
           ? 'Possible head covering detected'
           : 'No religious head covering detected',
-      headwear.hijabDetected
-        ? 'Religious head coverings are treated separately from hats. Keep the full face visible from the bottom of the chin to the top of the forehead.'
+      headCoveringDetected
+        ? 'Religious head coverings are allowed. Keep the full face visible from the bottom of the chin to the top of the forehead.'
         : headwear.possibleHeadCovering
           ? 'Please confirm whether this is religious headwear or a hat; the automated result is intentionally conservative.'
           : 'No religious head covering was identified by the automated check.',
     ),
+    maskState === 'present'
+      ? createPassedCheck('Face & Position', 'maskFree', 'No face mask detected', 'Face mask detected', false, maskHelp)
+      : maskState === 'absent'
+        ? createPassedCheck('Face & Position', 'maskFree', 'No face mask detected', 'Face mask detected', true, maskHelp)
+        : createInfoCheck(
+            'Face & Position',
+            'maskFree',
+            'Confirm you are not wearing a face mask',
+            'The automatic mask check could not reach a verdict on this photo, so please confirm it yourself before you submit it.',
+            {
+              requiresConfirmation: true,
+              confirmLabel: 'I am not wearing a face mask or anything covering my nose or mouth.',
+            },
+          ),
   );
 
   checks.push(
@@ -517,8 +558,12 @@ export function buildComplianceChecks(processed, preset, documentType = null) {
       ? createInfoCheck(
           'Eyes & Expression',
           'eyewearFree',
-          "We couldn't check for glasses",
-          'The photo was too small, dark or uneven for the glasses check to be sure. Confirm yourself that you are not wearing glasses before you submit it.',
+          'Confirm you are not wearing glasses',
+          'The glasses check could not reach a verdict on this photo, so please confirm it yourself before you submit it.',
+          {
+            requiresConfirmation: true,
+            confirmLabel: 'I am not wearing glasses in this photo.',
+          },
         )
       : eyewearPolicy === 'conditional'
       ? createAdvisoryCheck(
@@ -526,7 +571,7 @@ export function buildComplianceChecks(processed, preset, documentType = null) {
           'eyewearFree',
           'No glasses detected',
           'Glasses detected - check for glare and clear eyes',
-          !eyewear.wearingGlasses,
+          !wearingGlasses,
           true,
           'If glasses stay on, the eyes must remain clearly visible and free of glare, reflections, and tinted lenses.',
         )
@@ -536,18 +581,30 @@ export function buildComplianceChecks(processed, preset, documentType = null) {
             'eyewearFree',
             'No glasses detected',
             'Glasses detected',
-            !eyewear.wearingGlasses,
+            !wearingGlasses,
             'Remove glasses and retake the photo. This document blocks eyewear before checkout.',
           )
-        : createAdvisoryCheck(
-            'Eyes & Expression',
-            'eyewearFree',
-            'No glasses detected',
-            'Possible glasses detected - confirm eyes are clear',
-            !eyewear.wearingGlasses,
-            true,
-            'If the detector is unsure, keep the eyes fully visible and free of glare before using the export.',
-          ),
+        : wearingGlasses
+          // Signs of glasses without a confident verdict used to pass with a
+          // note. A note is not a verdict; ask instead.
+          ? createInfoCheck(
+              'Eyes & Expression',
+              'eyewearFree',
+              'Confirm you are not wearing glasses',
+              'The checks saw signs of glasses but could not be sure. Confirm yourself before you submit this photo.',
+              {
+                requiresConfirmation: true,
+                confirmLabel: 'I am not wearing glasses in this photo.',
+              },
+            )
+          : createPassedCheck(
+              'Eyes & Expression',
+              'eyewearFree',
+              'No glasses detected',
+              'Glasses detected',
+              true,
+              'Remove glasses and retake the photo. This document blocks eyewear before checkout.',
+            ),
     createAdvisoryCheck(
       'Eyes & Expression',
       'neutralExpression',
@@ -724,6 +781,20 @@ export function buildComplianceChecks(processed, preset, documentType = null) {
   );
 
   return checks;
+}
+
+// Checks the automated pass could not decide. Checkout stays locked until the
+// customer answers each one, so an undecided detector can never quietly sell a
+// non-compliant photo.
+export function getPendingConfirmations(checks = []) {
+  return checks
+    .filter((check) => check.requiresConfirmation && check.status === CHECK_STATUSES.info)
+    .map((check) => ({
+      key: check.key,
+      label: check.label,
+      confirmLabel: check.confirmLabel,
+      noteText: check.noteText,
+    }));
 }
 
 export function summarizeCompliance(checks) {

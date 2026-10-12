@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { AlertCircle, CheckCircle2, LockKeyhole, ShieldCheck } from 'lucide-react';
 import { CAPTURE_MODES, VIEWS } from '../../lib/utils/constants';
 import { FlowShell } from '../flow/FlowShell';
@@ -16,7 +17,28 @@ export function ResultView({
 }) {
   const passed = result.status === 'passed';
   const retouchRequired = result.status === 'needs_retouch';
-  const canProceed = Boolean(result.canProceedToCheckout);
+  // Detections the automated pass could not decide. Checkout stays locked until
+  // the customer answers each one, so an abstaining detector can no longer let
+  // a hat or glasses through unchallenged.
+  const pendingConfirmations = result.pendingConfirmations || [];
+  // Tracked against the result id so a new photo always starts unconfirmed,
+  // without needing an effect to clear it.
+  const [confirmation, setConfirmation] = useState({ resultId: result.id, keys: [] });
+  const confirmedKeys = confirmation.resultId === result.id ? confirmation.keys : [];
+
+  const toggleConfirmation = (key) => {
+    setConfirmation((current) => {
+      const keys = current.resultId === result.id ? current.keys : [];
+      return {
+        resultId: result.id,
+        keys: keys.includes(key) ? keys.filter((item) => item !== key) : [...keys, key],
+      };
+    });
+  };
+
+  const allConfirmed = pendingConfirmations.every((item) => confirmedKeys.includes(item.key));
+  const awaitingConfirmation = Boolean(result.canProceedToCheckout) && !allConfirmed;
+  const canProceed = Boolean(result.canProceedToCheckout) && allConfirmed;
   const detectedBackgroundTone = result.metadata?.analysis?.background?.backgroundTone || 'other';
   const detectedBackgroundToneLabel = result.metadata?.analysis?.background?.backgroundToneLabel || 'Unknown';
   const canOfferOptionalWhiteCleanup =
@@ -152,8 +174,51 @@ export function ResultView({
         <ResultPreviewCard result={result} />
 
         <div className="space-y-6">
+          {pendingConfirmations.length ? (
+            <div className="surface-card border-amber-200 bg-amber-50/60 p-6 sm:p-7">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-amber-900">
+                    {pendingConfirmations.length === 1
+                      ? 'One thing to confirm before checkout'
+                      : `${pendingConfirmations.length} things to confirm before checkout`}
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-amber-900/80">
+                    Our automatic check could not reach a verdict on
+                    {pendingConfirmations.length === 1 ? ' this point' : ' these points'}. Applications
+                    get rejected for them, so please confirm yourself.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {pendingConfirmations.map((item) => (
+                  <label
+                    key={item.key}
+                    className="flex cursor-pointer items-start gap-3 rounded-2xl border border-amber-200 bg-white px-4 py-3"
+                  >
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4 shrink-0"
+                      checked={confirmedKeys.includes(item.key)}
+                      onChange={() => toggleConfirmation(item.key)}
+                    />
+                    <span className="min-w-0 text-sm leading-6 text-slate-800">
+                      <span className="font-semibold">{item.confirmLabel || item.label}</span>
+                      {item.noteText ? (
+                        <span className="mt-1 block text-slate-500">{item.noteText}</span>
+                      ) : null}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           <ResultActions
             canProceed={canProceed}
+            awaitingConfirmation={awaitingConfirmation}
             requiresPremiumRetouch={Boolean(result.requiresPremiumRetouch)}
             onProceedToCheckout={onProceedToCheckout}
             onRetake={onRetake}

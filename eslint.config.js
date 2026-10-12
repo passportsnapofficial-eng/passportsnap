@@ -5,7 +5,7 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist', '.vercel/**', 'public/mediapipe/**', '.edge-cdp/**']),
+  globalIgnores(['dist', '.venv/**', '.venv-data/**', 'services/attribute_detection/data/**', '.vercel/**', 'public/mediapipe/**', '.edge-cdp/**']),
   {
     files: ['api/**/*.js', 'server/**/*.{js,mjs}', 'scripts/**/*.{js,mjs}', 'src/lib/**/*ServerCore.js'],
     languageOptions: {

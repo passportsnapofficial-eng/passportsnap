@@ -6,9 +6,11 @@ import {
   buildComplianceChecks,
   buildDetectedIssuesSummary,
   buildRetakeGuidance,
+  getPendingConfirmations,
   summarizeCompliance,
 } from './complianceChecks';
 import { exportPassportImage } from './exportPassportImage';
+import { detectPhotoAttributes } from './attributeDetectionClient';
 
 function isAutomaticBackgroundRemovalApplied(exported) {
   return Boolean(exported.backgroundRemoval?.applied);
@@ -46,6 +48,14 @@ export async function processPassportPhoto(sourcePhoto, options = {}) {
     respectSourceFraming: Boolean(options.respectSourceFraming),
     validationPolicy,
   });
+
+  // Server-side model pass over the finished export. It answers glasses, hat,
+  // religious head covering and face mask with three-state verdicts. If the
+  // service is unreachable every attribute comes back "unsure", which the
+  // compliance checks turn into a customer confirmation rather than a clear.
+  await reportStage('detect-attributes');
+  exported.analysis.attributes = await detectPhotoAttributes(exported.dataUrl);
+
   const checks = buildComplianceChecks(exported, preset, documentType);
   const summary = summarizeCompliance(checks);
   const failedCount = summary.failedChecks.length;
@@ -114,6 +124,8 @@ export async function processPassportPhoto(sourcePhoto, options = {}) {
     requirements: documentType?.requirements || preset.requirements || [],
     status: summary.status,
     canProceedToCheckout: summary.status !== 'needs_retake',
+    // Undecided detections the customer must answer before checkout unlocks.
+    pendingConfirmations: getPendingConfirmations(checks),
     requiresPremiumRetouch: summary.recovery.requiresPremiumRetouch,
     backgroundRemovalApplied,
     backgroundCleanupAllowed,

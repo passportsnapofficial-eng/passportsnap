@@ -351,6 +351,16 @@
                 sourcePath: entry.sourcePath,
                 status: result.status,
                 canProceedToCheckout: result.canProceedToCheckout,
+                // Fused verdicts: what the customer actually sees. The gate
+                // script scores these, not the raw detector signals.
+                pendingConfirmations: (result.pendingConfirmations || []).map((item) => item.key),
+                checkStatuses: Object.fromEntries((result.checks || []).map((check) => [check.key, check.status])),
+                attributeServiceAvailable: Boolean(result.metadata?.analysis?.attributes?.available),
+                attributeStates: result.metadata?.analysis?.attributes?.attributes
+                  ? Object.fromEntries(
+                      Object.entries(result.metadata.analysis.attributes.attributes).map(([key, value]) => [key, value.state]),
+                    )
+                  : null,
                 requiresPremiumRetouch: result.requiresPremiumRetouch,
                 rejectionReasons: result.rejectionReasons || [],
                 failedChecks: result.failedChecks.map((check) => check.key),

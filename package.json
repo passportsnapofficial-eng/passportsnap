@@ -15,6 +15,7 @@
     "dev:image-enhancer": "python -m uvicorn services.image_enhancement.main:app --host 127.0.0.1 --port 8788",
     "build": "vite build",
     "lint": "eslint .",
+    "gate:attributes": "node scripts/runAttributeGate.mjs",
     "preview": "vite preview",
     "start": "node server/appServer.mjs --serve-dist",
     "supabase:login": "npx supabase login",

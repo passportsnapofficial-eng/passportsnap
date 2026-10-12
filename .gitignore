@@ -53,3 +53,10 @@ playwright-*.png
 *-check.png
 payment-waiting-screen.png
 build-run-*.png
+
+# Python ML environment
+.venv/
+.venv-data/
+
+# Downloaded evaluation data (Open Images crops) - regenerate with prepare_openimages_eval.py
+services/attribute_detection/data/

@@ -2,6 +2,7 @@ import { ArrowRight, RefreshCcw } from 'lucide-react';
 
 export function ResultActions({
   canProceed,
+  awaitingConfirmation = false,
   requiresPremiumRetouch = false,
   onProceedToCheckout,
   onRetake,
@@ -38,9 +39,15 @@ export function ResultActions({
       ) : null}
 
       {!canProceed ? (
-        <p className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
-          Checkout stays disabled until the first-pass review is clear enough to proceed.
-        </p>
+        awaitingConfirmation ? (
+          <p className="mt-4 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Confirm the points above to unlock checkout.
+          </p>
+        ) : (
+          <p className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+            Checkout stays disabled until the first-pass review is clear enough to proceed.
+          </p>
+        )
       ) : null}
     </div>
   );
