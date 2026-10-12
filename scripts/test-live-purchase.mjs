@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 
-const APP_URL = process.env.APP_URL || 'https://passportsnap.vercel.app';
+const APP_URL = process.env.APP_URL || 'https://www.passportsnap.com';
 const TEST_EMAIL = 'kennedyabu85@gmail.com';
 const TEST_FIRST_NAME = 'Kennedy';
 const TEST_LAST_NAME = 'Abubakar';
