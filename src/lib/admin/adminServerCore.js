@@ -1134,8 +1134,14 @@ export async function saveAdminSiteSettings(payload) {
   if (hasSupabaseAdminAccess()) {
     try {
       return await upsertSupabaseSiteSettings(normalizedSettings);
-    } catch {
-      // Fall back to the local file store when service-role access is not available locally.
+    } catch (error) {
+      // A setting that Supabase refused to store must not be "saved" to the
+      // local file instead: on a serverless host that file is temporary, so
+      // the admin sees a success and the value silently reverts on refresh.
+      // Surface it. Only genuine lack of service-role access falls back.
+      if (error?.statusCode === 409) {
+        throw error;
+      }
     }
   }
 
